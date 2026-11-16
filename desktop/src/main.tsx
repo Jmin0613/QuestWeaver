@@ -158,7 +158,8 @@ function QuestView({ id, onBack, onEdit, onFlow }: {
         </dl>
         <h3>퀘스트 원문</h3>
         <div className="quest-body">{detail.body?.trim() ? detail.body : '입력한 원문이 없습니다.'}</div>
-        <FlowPreview questId={id} onEdit={() => onFlow(detail)} disabled={deleting} />
+        <FlowPreview questId={id} gameName={info.gameName ?? '게임 미선택'} title={questTitle(info.title)}
+          onEdit={() => onFlow(detail)} disabled={deleting} />
         <div className="actions">
           <button type="button" className="primary" disabled={deleting} onClick={() => onEdit(detail)}>수정</button>
           <button type="button" className="danger" disabled={deleting} onClick={() => void remove(questTitle(info.title))}>

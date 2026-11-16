@@ -2,6 +2,7 @@ const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const { mkdirSync } = require('node:fs');
 const path = require('node:path');
 const { startBackend } = require('./backend.cjs');
+const { savePng } = require('./pngExport.cjs');
 
 let window;
 let backend;
@@ -68,6 +69,11 @@ if (!app.requestSingleInstanceLock()) {
     }
     if (!backend || stopping) return { ok: false, message: '백엔드에 연결되어 있지 않습니다.' };
     return backend.request(method, route, body);
+  });
+
+  ipcMain.handle('flow:save-png', (event, title, bytes) => {
+    if (!isAppFrame(event) || stopping) return { status: 'error', message: 'PNG 저장을 시작할 수 없습니다.' };
+    return savePng(window, title, bytes);
   });
 
   ipcMain.on('editor:close-guard', (event, guarded) => {

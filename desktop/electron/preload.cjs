@@ -4,6 +4,9 @@ contextBridge.exposeInMainWorld('questWeaver', {
   request(method, route, body) {
     return ipcRenderer.invoke('backend:request', method, route, body);
   },
+  saveFlowPng(title, bytes) {
+    return ipcRenderer.invoke('flow:save-png', title, bytes);
+  },
   setCloseGuard(guarded) {
     ipcRenderer.send('editor:close-guard', guarded);
   },

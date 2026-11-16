@@ -6,10 +6,12 @@ import type { FlowDocument, Link, Step } from './flowModel';
 type StepData = Pick<Step, 'kind' | 'title' | 'description'>;
 export type StepNode = Node<StepData, 'questStep'>;
 export type LinkEdge = Edge<{ condition: string; lane?: number; select?: (id: string) => void }, 'questLink'>;
+export const stepWidth = 156;
+export const stepHeight = 54;
 
 export function asNode({ id, x, y, kind, title, description }: Step): StepNode {
-  const width = 156;
-  const height = 54;
+  const width = stepWidth;
+  const height = stepHeight;
   const handleSize = 12;
   const handleY = (height - handleSize) / 2;
   // Fixed cards and handle positions let edges render on the first frame.
@@ -90,14 +92,21 @@ function StepBox({ data, isConnectable }: NodeProps<StepNode>) {
   );
 }
 
-function LinkLine({ id, sourceX, sourceY, targetX, targetY, markerEnd, interactionWidth, data, selected }: EdgeProps<LinkEdge>) {
-  const lane = data?.lane ?? 0;
+export function linkCurve(sourceX: number, sourceY: number, targetX: number, targetY: number, lane: number) {
   const backward = targetX < sourceX;
   const reach = backward ? 75 + 20 * Math.abs(lane) : Math.max(35, (targetX - sourceX) / 2);
   const bend = (backward ? 125 : 0) + lane * 58;
-  const path = `M ${sourceX},${sourceY} C ${sourceX + reach},${sourceY + bend} ${targetX - reach},${targetY + bend} ${targetX},${targetY}`;
-  const labelX = (sourceX + targetX) / 2;
-  const labelY = (sourceY + targetY) / 2 + 0.75 * bend;
+  return {
+    controlX1: sourceX + reach, controlY1: sourceY + bend,
+    controlX2: targetX - reach, controlY2: targetY + bend,
+    labelX: (sourceX + targetX) / 2, labelY: (sourceY + targetY) / 2 + 0.75 * bend,
+  };
+}
+
+function LinkLine({ id, sourceX, sourceY, targetX, targetY, markerEnd, interactionWidth, data, selected }: EdgeProps<LinkEdge>) {
+  const { controlX1, controlY1, controlX2, controlY2, labelX, labelY } =
+    linkCurve(sourceX, sourceY, targetX, targetY, data?.lane ?? 0);
+  const path = `M ${sourceX},${sourceY} C ${controlX1},${controlY1} ${controlX2},${controlY2} ${targetX},${targetY}`;
   const condition = data?.condition.trim();
   const select = data?.select;
   const labelStyle = { transform: `translate(${labelX}px, ${labelY}px) translate(-50%, -130%)` };

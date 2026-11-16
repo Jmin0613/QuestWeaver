@@ -12,6 +12,9 @@ declare global {
   interface Window {
     questWeaver: {
       request(method: Method, route: string, body?: object): Promise<Reply>;
+      saveFlowPng(title: string, bytes: Uint8Array): Promise<
+        { status: 'saved' | 'canceled' } | { status: 'error'; message: string }
+      >;
       setCloseGuard(guarded: boolean): void;
       onBackendStatus(callback: (status: BackendStatus) => void): () => void;
     };

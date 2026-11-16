@@ -1,22 +1,55 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Background, ReactFlow } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import './flow.css';
-import { useResource } from './api';
+import { errorMessage, useResource } from './api';
+import { renderFlowPng } from './flowPng';
 import { asEdge, asNode, FlowControls, flowEdgeTypes, flowFitOptions, flowNodeTypes, withLanes } from './flowElements';
 import { stepLabels } from './flowModel';
 import type { FlowDocument } from './flowModel';
 
-export function FlowPreview({ questId, onEdit, disabled }: { questId: string; onEdit: () => void; disabled: boolean }) {
+export function FlowPreview({ questId, gameName, title, onEdit, disabled }: {
+  questId: string; gameName: string; title: string; onEdit: () => void; disabled: boolean;
+}) {
   const flow = useResource<FlowDocument>(`/api/quests/${questId}/flow`);
   const empty = flow.data?.steps.length === 0;
+  const pending = useRef(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const [exported, setExported] = useState(false);
+
+  async function exportPng() {
+    if (pending.current || !flow.data?.steps.length) return;
+    pending.current = true;
+    setExporting(true);
+    setExported(false);
+    setExportError('');
+    try {
+      const bytes = await renderFlowPng(flow.data, gameName, title);
+      const result = await window.questWeaver.saveFlowPng(title, bytes);
+      if (result.status === 'error') setExportError(result.message);
+      if (result.status === 'saved') setExported(true);
+    } catch (failure) {
+      setExportError(errorMessage(failure));
+    } finally {
+      pending.current = false;
+      setExporting(false);
+    }
+  }
 
   return (
     <section className="flow-preview" aria-labelledby="flow-preview-title">
       <div className="section-heading">
         <h3 id="flow-preview-title">퀘스트 플로우</h3>
-        {!empty && <button type="button" onClick={onEdit} disabled={disabled}>플로우 편집</button>}
+        <div className="flow-heading-actions">
+          {!empty && <button type="button" onClick={onEdit} disabled={disabled || exporting}>플로우 편집</button>}
+          <button type="button" onClick={() => void exportPng()}
+            disabled={disabled || exporting || !flow.data?.steps.length}>PNG 내보내기</button>
+        </div>
       </div>
+      {exporting && <p role="status">PNG 내보내는 중…</p>}
+      {exported && <p className="success" role="status">PNG를 저장했습니다.</p>}
+      {exportError && <p className="error" role="alert">{exportError}</p>}
       {flow.loading && <p role="status">플로우를 불러오고 있습니다.</p>}
       {flow.error && <p className="error" role="alert">
         플로우를 불러오지 못했습니다. {flow.error} <button type="button" onClick={flow.reload} disabled={disabled}>다시 불러오기</button>
