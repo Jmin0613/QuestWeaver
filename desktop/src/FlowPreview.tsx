@@ -30,7 +30,7 @@ export function FlowPreview({ questId, onEdit, disabled }: { questId: string; on
   );
 }
 
-function PreviewChart({ flow }: { flow: FlowDocument }) {
+export function PreviewChart({ flow, id }: { flow: FlowDocument; id?: string }) {
   const [selectedId, setSelectedId] = useState<string>();
   const selected = flow.steps.find((step) => step.id === selectedId);
   const nodes = useMemo(() => flow.steps.map((step) => ({
@@ -51,6 +51,7 @@ function PreviewChart({ flow }: { flow: FlowDocument }) {
           setSelectedId(id);
         }}>
         <ReactFlow
+          id={id}
           nodes={nodes}
           edges={edges}
           nodeTypes={flowNodeTypes}

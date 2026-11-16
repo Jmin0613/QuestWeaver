@@ -1,0 +1,22 @@
+ README.md                                          |  30 [32m++[m[31m-[m
+ .../com/jmin/questweaver/quest/FlowDocument.java   |  27 [32m+++[m
+ .../java/com/jmin/questweaver/quest/Quest.java     |   3 [32m+[m
+ .../jmin/questweaver/quest/QuestController.java    |  10 [32m+[m
+ .../java/com/jmin/questweaver/quest/QuestFlow.java |  35 [32m+++[m
+ .../com/jmin/questweaver/quest/QuestStore.java     |  62 [32m++++[m[31m-[m
+ .../com/jmin/questweaver/quest/QuestFlowTests.java | 149 [32m++++++++++++[m
+ desktop/electron/backend.cjs                       |  29 [32m++[m[31m-[m
+ desktop/electron/main.cjs                          |  59 [32m++++[m[31m-[m
+ desktop/electron/preload.cjs                       |   6 [32m+[m
+ desktop/package-lock.json                          | 260 [32m+++++++++++++++++++++[m
+ desktop/package.json                               |  24 [32m+[m[31m-[m
+ desktop/src/FlowEditor.tsx                         | 227 [32m++++++++++++++++++[m
+ desktop/src/QuestEditor.tsx                        | 192 [32m+++++++++++++++[m
+ desktop/src/api.ts                                 |  98 [32m++++++++[m
+ desktop/src/flow.css                               | 120 [32m++++++++++[m
+ desktop/src/flowElements.tsx                       | 103 [32m++++++++[m
+ desktop/src/flowModel.ts                           |  29 [32m+++[m
+ desktop/src/main.tsx                               | 220 [32m++++++++++++++[m[31m---[m
+ desktop/src/style.css                              | 193 [32m+++++++++++[m[31m----[m
+ desktop/src/useCloseGuard.ts                       |  17 [32m++[m
+ 21 files changed, 1800 insertions(+), 93 deletions(-)

@@ -59,6 +59,26 @@ Windows에서 개발 앱과 설치 앱은 각각의 H2 파일을 사용합니다
 4. 단계나 연결선을 바꾼 후 **상세로 돌아가기** 또는 창 닫기를 취소하면 편집 내용이 유지됩니다. 화면 위치나 확대 비율만 바꾼 경우에도 **플로우 저장**을 누르면 변경된 보기 상태가 저장됩니다.
 5. 연결된 단계를 삭제해 그 선도 사라지는지 확인합니다. 나머지 단계도 모두 지운 뒤 저장하고 다시 열면 빈 화면이 표시됩니다.
 
+## AI 플로우 초안 생성
+
+개발 앱의 플로우 편집 화면에서 **AI로 플로우 생성**을 누릅니다. 전송을 확인하면 저장된 퀘스트 원문을 OpenAI Responses API로 보냅니다. 생성 결과와 **확인 필요** 항목을 검토한 뒤 **적용**하면 편집 중인 차트가 교체됩니다. DB에 반영하려면 **플로우 저장**을 누릅니다.
+
+API 키는 개발 앱을 실행할 PowerShell 세션에서 입력합니다. 입력값은 화면에 표시되지 않습니다. 기존 개발 앱이 열려 있으면 먼저 종료합니다.
+
+```powershell
+Set-Location 'C:\Users\jumin\questweaver\desktop'
+$env:JAVA_HOME = 'C:\path\to\jdk-21'
+$env:QUESTWEAVER_OPENAI_MODEL = 'gpt-5.4-mini'
+$env:QUESTWEAVER_OPENAI_API_KEY = [System.Net.NetworkCredential]::new('', (Read-Host 'OpenAI API key' -AsSecureString)).Password
+try {
+    npm.cmd run dev
+} finally {
+    Remove-Item Env:QUESTWEAVER_OPENAI_API_KEY -ErrorAction SilentlyContinue
+}
+```
+
+기본 모델인 GPT-5.4 mini는 Responses API와 Structured Outputs를 지원합니다. 첫 실행 시에는 위 개발 실행 절차의 `npm.cmd ci`도 실행합니다. 키가 없을 때는 화면에 설정 안내가 표시되며 퀘스트와 수동 플로우 기능은 사용할 수 있습니다. 실제 API 호출에는 별도 요금이 발생할 수 있습니다. [모델과 요금](https://developers.openai.com/api/docs/models/gpt-5.4-mini)
+
 ## 빌드 및 테스트
 
 다음 명령은 이 문서가 있는 폴더를 기준으로 실행합니다.

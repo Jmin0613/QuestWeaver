@@ -3,8 +3,14 @@ const { mkdirSync } = require('node:fs');
 const path = require('node:path');
 const { createInterface } = require('node:readline');
 
-function startBackend({ java, jar, dataDir, onStatus }) {
+function startBackend({ java, jar, dataDir, onStatus, allowAi }) {
   mkdirSync(dataDir, { recursive: true });
+  const env = { ...process.env, QUESTWEAVER_DATA_DIR: dataDir.replaceAll('\\', '/') };
+  if (!allowAi) {
+    for (const name of Object.keys(env)) {
+      if (name.toUpperCase() === 'QUESTWEAVER_OPENAI_API_KEY') delete env[name];
+    }
+  }
   const child = spawn(java, [
     '-jar', jar,
     '--questweaver.desktop-managed=true',
@@ -12,7 +18,7 @@ function startBackend({ java, jar, dataDir, onStatus }) {
     '--server.port=0',
   ], {
     cwd: dataDir,
-    env: { ...process.env, QUESTWEAVER_DATA_DIR: dataDir.replaceAll('\\', '/') },
+    env,
     windowsHide: true,
   });
   const closed = new Promise((resolve) => child.once('close', resolve));
@@ -46,21 +52,25 @@ function startBackend({ java, jar, dataDir, onStatus }) {
     if (!connected || stopPromise) {
       return { ok: false, message: '백엔드에 연결되어 있지 않습니다.' };
     }
+    const generation = method === 'POST' && route.endsWith('/flow/generate');
     try {
       const response = await fetch(origin + route, {
         method,
         headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
         body: body === undefined ? undefined : JSON.stringify(body),
         redirect: 'error',
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(generation ? 65_000 : 15_000),
       });
       if (response.status === 204) return { ok: true };
       const data = await response.json().catch(() => null);
       if (response.ok && data !== null) return { ok: true, data };
-      return { ok: false, message: response.status < 500 && data?.message
+      return { ok: false, message: (response.status < 500 || generation) && typeof data?.message === 'string'
         ? data.message : '요청을 처리하지 못했습니다. 다시 시도하세요.' };
     } catch (error) {
       console.error('[backend request]', method, error.message);
+      if (generation && error.name === 'TimeoutError') {
+        return { ok: false, message: 'AI 생성 응답 시간이 초과되었습니다. 다시 시도하세요.' };
+      }
       return { ok: false, message: '백엔드 응답을 확인할 수 없습니다. 연결 상태를 확인하세요.' };
     }
   }

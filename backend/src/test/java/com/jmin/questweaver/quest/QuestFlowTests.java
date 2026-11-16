@@ -104,6 +104,28 @@ class QuestFlowTests {
         assertThat(read(flow)).isEqualTo(json.valueToTree(incomplete));
     }
 
+    @Test
+    void inspectsTheSubmittedGraphWithoutWritingToTheQuest() throws Exception {
+        String quest = newDraft("검사할 퀘스트");
+        String flow = quest + "/flow";
+        FlowDocument saved = example();
+        send("PUT", flow, saved, 200);
+        JsonNode before = read(quest);
+        var branch = step(FlowDocument.Kind.BRANCH, 0, 0);
+        FlowDocument unsaved = new FlowDocument(List.of(branch), List.of(), saved.viewport());
+        JsonNode warnings = send("POST", "/api/flow/inspect", unsaved, 200);
+        assertThat(warnings.size()).isEqualTo(5);
+        assertThat(warnings.at("/3/stepId").asString()).isEqualTo(branch.id().toString());
+        assertThat(warnings.at("/3/code").asString()).isEqualTo("TOO_FEW_BRANCHES");
+        assertThat(read(flow)).isEqualTo(json.valueToTree(saved));
+        assertThat(read(quest)).isEqualTo(before);
+
+        var invalid = new FlowDocument(List.of(branch, branch), List.of(), saved.viewport());
+        send("POST", "/api/flow/inspect", invalid, 400);
+        send("PUT", flow, unsaved, 200);
+        assertThat(read(flow)).isEqualTo(json.valueToTree(unsaved));
+    }
+
     private String newDraft(String title) throws Exception {
         String quest = "/api/quests/" + UUID.randomUUID();
         send("PUT", quest, Map.of("title", title, "body", "첫 줄\n둘째 줄", "author", "기획자",

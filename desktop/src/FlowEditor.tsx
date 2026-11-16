@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import {
   Background, ReactFlow, ReactFlowProvider, useEdgesState, useNodesState, useReactFlow,
@@ -8,13 +8,15 @@ import '@xyflow/react/dist/style.css';
 import './flow.css';
 import { errorMessage, questTitle, request, useResource } from './api';
 import type { QuestDetail } from './api';
-import { asEdge, asNode, FlowControls, flowEdgeTypes, flowNodeTypes, graphData, withLanes } from './flowElements';
+import { asEdge, asNode, FlowControls, flowEdgeTypes, flowFitOptions, flowNodeTypes, graphData, withLanes } from './flowElements';
+import { AiFlowGenerator } from './AiFlowGenerator';
 import type { LinkEdge, StepNode } from './flowElements';
 import { stepLabels } from './flowModel';
 import type { FlowDocument, StepKind } from './flowModel';
 import { useCloseGuard } from './useCloseGuard';
 
 type Props = { quest: QuestDetail; onBack: () => void };
+type InspectionWarning = { code: string; stepId: string | null; reason: string };
 const kinds = Object.keys(stepLabels) as StepKind[];
 
 export function FlowEditor({ quest, onBack }: Props) {
@@ -43,9 +45,13 @@ function FlowWorkspace({ quest, onBack, initial, route }: Props & { initial: Flo
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.links.map(asEdge));
   const [savedGraph, setSavedGraph] = useState(() => JSON.stringify(graphData(nodes, edges)));
   const [saving, setSaving] = useState(false);
+  const [appliedDraft, setAppliedDraft] = useState<FlowDocument>();
   const pending = useRef(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [inspection, setInspection] = useState<{ signature: string; warnings: InspectionWarning[] }>();
+  const [inspectionError, setInspectionError] = useState('');
 
   const selectLink = useCallback((id: string) => {
     setNodes((current) => current.map((node) => node.selected ? { ...node, selected: false } : node));
@@ -55,8 +61,33 @@ function FlowWorkspace({ quest, onBack, initial, route }: Props & { initial: Flo
   const renderedEdges = useMemo(() => withLanes(edges, selectLink), [edges, selectLink]);
   const graph = useMemo(() => graphData(nodes, edges), [nodes, edges]);
   const signature = JSON.stringify(graph);
-  const dirty = signature !== savedGraph;
+  const inspectionSignature = JSON.stringify({
+    steps: graph.steps.map(({ id, kind, title, description }) => ({ id, kind, title, description })),
+    links: graph.links,
+  });
+  const needsInspection = inspection !== undefined && inspection.signature !== inspectionSignature;
+  const inspectionStatus = !inspection ? '검사 전'
+    : needsInspection ? '재검사 필요'
+    : inspection.warnings.length ? '경고 있음' : '경고 없음';
+  const dirty = !!appliedDraft || signature !== savedGraph;
   useCloseGuard(dirty || saving);
+
+  useEffect(() => {
+    if (!appliedDraft) return;
+    if (appliedDraft.steps.length) {
+      void view.fitView(flowFitOptions);
+    } else {
+      void view.setViewport(appliedDraft.viewport);
+    }
+  }, [appliedDraft, view]);
+
+  function applyDraft(flow: FlowDocument) {
+    setNodes(flow.steps.map(asNode));
+    setEdges(flow.links.map(asEdge));
+    setAppliedDraft(flow);
+    setSaved(false);
+    setError('');
+  }
 
   const step = nodes.find((node) => node.selected);
   const link = edges.find((edge) => edge.selected);
@@ -128,6 +159,7 @@ function FlowWorkspace({ quest, onBack, initial, route }: Props & { initial: Flo
     try {
       await request<FlowDocument>('PUT', route, { ...graph, viewport: view.getViewport() });
       setSavedGraph(signature);
+      setAppliedDraft(undefined);
       setSaved(true);
     } catch (failure) {
       setError(errorMessage(failure));
@@ -142,6 +174,35 @@ function FlowWorkspace({ quest, onBack, initial, route }: Props & { initial: Flo
     if (!dirty || window.confirm('저장하지 않은 플로우 변경이 있습니다. 상세로 돌아갈까요?')) onBack();
   }
 
+  async function inspect() {
+    if (checking) return;
+    setChecking(true);
+    setInspectionError('');
+    try {
+      const warnings = await request<InspectionWarning[]>('POST', '/api/flow/inspect', {
+        ...graph, viewport: initial.viewport,
+      });
+      setInspection({ signature: inspectionSignature, warnings });
+    } catch (failure) {
+      setInspectionError(errorMessage(failure));
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  function focusStep(id: string) {
+    const target = nodes.find((node) => node.id === id);
+    if (!target) return;
+    setNodes((current) => current.map((node) => ({ ...node, selected: node.id === id })));
+    setEdges((current) => current.map((edge) => edge.selected ? { ...edge, selected: false } : edge));
+    canvas.current?.scrollIntoView({ block: 'nearest' });
+    void view.setCenter(
+      target.position.x + (target.measured?.width ?? target.initialWidth ?? 0) / 2,
+      target.position.y + (target.measured?.height ?? target.initialHeight ?? 0) / 2,
+      { zoom: Math.max(view.getZoom(), 0.85), duration: 240 },
+    );
+  }
+
   const titleFor = (id: string) => nodes.find((node) => node.id === id)?.data.title.trim() || '제목 없는 단계';
 
   return (
@@ -151,6 +212,7 @@ function FlowWorkspace({ quest, onBack, initial, route }: Props & { initial: Flo
         <div className="flow-heading-actions">
           <button type="button" disabled={saving} onClick={back}>상세로 돌아가기</button>
           <button type="button" className="primary" disabled={saving} onClick={() => void save()}>플로우 저장</button>
+          <button type="button" disabled={checking} onClick={() => void inspect()}>검사</button>
         </div>
       </div>
       <div className="flow-toolbar" aria-label="단계 추가">
@@ -159,9 +221,22 @@ function FlowWorkspace({ quest, onBack, initial, route }: Props & { initial: Flo
         </button>)}
         {dirty && <span className="flow-unsaved">저장하지 않은 변경</span>}
       </div>
+      <AiFlowGenerator route={route} ready={!saving} hasSource={!!quest.body?.trim()} onApply={applyDraft} />
       {saving && <p role="status">플로우를 저장하고 있습니다.</p>}
       {saved && !dirty && <p className="success" role="status">플로우를 저장했습니다.</p>}
       {error && <p className="error" role="alert">{error}</p>}
+      <section className="flow-inspection" aria-label="플로우 검사 결과">
+        <p role="status"><strong>{inspectionStatus}</strong>{checking && ' · 플로우 검사 중…'}</p>
+        {inspectionError && <p className="error" role="alert">검사 요청에 실패했습니다. {inspectionError}</p>}
+        {inspection && !needsInspection && inspection.warnings.length > 0 && <ul>
+          {inspection.warnings.map(({ code, stepId, reason }) => <li key={`${code}:${stepId}`}>
+            {stepId ? <button type="button" className="inspection-warning" onClick={() => focusStep(stepId)}>
+              <strong>{titleFor(stepId)}</strong> · {reason}
+            </button> : reason}
+          </li>)}
+        </ul>}
+        <p className="hint">단계와 연결 구조를 검사합니다. 조건 충족 여부와 게임 내 실행은 별도로 확인하세요.</p>
+      </section>
       <div className="flow-layout">
         <div ref={canvas} className="flow-canvas" onKeyDown={canvasKeyDown} role="region" aria-label="퀘스트 차트">
           <ReactFlow

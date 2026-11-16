@@ -29,11 +29,14 @@ import org.springframework.web.server.ResponseStatusException;
 class QuestController {
     record NameInput(@NotBlank @Size(max = 120) String name) {}
     record ErrorMessage(String message) {}
+    record AiStatus(boolean configured) {}
 
     private final QuestStore store;
+    private final AiFlowDrafts ai;
 
-    QuestController(QuestStore store) {
+    QuestController(QuestStore store, AiFlowDrafts ai) {
         this.store = store;
+        this.ai = ai;
     }
 
     @GetMapping("/games")
@@ -83,6 +86,21 @@ class QuestController {
     @PutMapping("/quests/{id}/flow")
     FlowDocument saveFlow(@PathVariable UUID id, @Valid @RequestBody FlowDocument document) {
         return store.saveFlow(id, document);
+    }
+
+    @PostMapping("/flow/inspect")
+    List<FlowInspection.Warning> inspectFlow(@Valid @RequestBody FlowDocument document) {
+        return FlowInspection.inspect(document);
+    }
+
+    @GetMapping("/ai/flow/status")
+    AiStatus aiStatus() {
+        return new AiStatus(ai.configured());
+    }
+
+    @PostMapping(path = "/quests/{id}/flow/generate", consumes = "application/json")
+    AiFlowDrafts.Draft generateFlow(@PathVariable UUID id) {
+        return ai.generate(id);
     }
 
     @DeleteMapping("/quests/{id}")
