@@ -1,0 +1,120 @@
+main.flow-main {
+  max-width: 1500px;
+  padding: 18px clamp(12px, 2.75vw, 36px) 28px;
+}
+
+.flow-main .app-header { margin-bottom: 14px; }
+.flow-panel { padding: clamp(12px, 2vw, 22px); }
+.flow-heading { gap: 12px; }
+.flow-heading .hint { margin: 4px 0 0; overflow-wrap: anywhere; }
+
+.flow-heading-actions, .flow-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.flow-toolbar { margin: 14px 0 10px; }
+.flow-unsaved { color: #775515; font-size: 0.82rem; margin-left: auto; }
+
+.flow-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(220px, 29%, 324px);
+  gap: 12px;
+  align-items: start;
+}
+
+.flow-canvas {
+  height: clamp(320px, calc(100vh - 230px), 880px);
+  overflow: hidden;
+  background: #f7f9fe;
+  border: 1px solid #dce2ed;
+  border-radius: 10px;
+}
+
+.flow-canvas .react-flow { --xy-edge-stroke-default: #53658c; --xy-edge-stroke-width-default: 2; }
+.flow-canvas .react-flow__edge.selected .react-flow__edge-path { stroke: #354fa2; stroke-width: 3.5; }
+.flow-canvas .react-flow__edge-interaction { stroke: transparent; pointer-events: stroke; cursor: pointer; }
+
+.flow-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  text-align: center;
+  pointer-events: none;
+  font-size: 0.9rem;
+  color: #55647a;
+}
+
+.flow-controls { display: flex; gap: 4px; }
+.flow-controls button { min-height: 32px; min-width: 33px; padding: 5px 8px; }
+
+.flow-step {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 8px 11px;
+  border: 1px solid var(--flow-accent);
+  border-left-width: 4px;
+  border-radius: 7px;
+  background: var(--flow-tint);
+}
+
+.flow-step-start { --flow-accent: #2b775d; --flow-tint: #edf8f3; }
+.flow-step-progress { --flow-accent: #4b61a0; --flow-tint: #f0f3fc; }
+.flow-step-branch { --flow-accent: #95601b; --flow-tint: #fff5e6; }
+.flow-step-end { --flow-accent: #985070; --flow-tint: #fff0f5; }
+.react-flow__node.selected .flow-step { outline: 2px solid #344c94; outline-offset: 3px; }
+.flow-step-kind { color: var(--flow-accent); font-size: 0.72rem; font-weight: 750; }
+.flow-step-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9rem; font-weight: 650; }
+
+.flow-step .react-flow__handle {
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  background: #445884;
+  border: 2px solid white;
+}
+
+.flow-canvas button.flow-link-label {
+  position: absolute;
+  pointer-events: auto;
+  min-height: 0;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 6px;
+  background: #fff;
+  border: 1px solid #d5def0;
+  border-radius: 5px;
+  font-size: 0.76rem;
+}
+
+.flow-canvas button.flow-link-label.selected { border-color: #344c94; color: #273d83; }
+
+.flow-sidebar {
+  padding: 13px;
+  border: 1px solid #dce2ed;
+  border-radius: 10px;
+  background: #f7f9fe;
+}
+
+.flow-sidebar h3 { margin: 0 0 12px; }
+.flow-sidebar fieldset { margin-top: 0; }
+.flow-sidebar label { margin-top: 10px; }
+.flow-sidebar textarea { min-height: 80px; }
+.flow-sidebar button.danger { margin-top: 10px; }
+.flow-endpoints { overflow-wrap: anywhere; color: #55647a; font-size: 0.85rem; }
+.flow-reference { margin-top: 16px; padding-top: 10px; border-top: 1px solid #dce2ed; }
+.flow-reference summary { cursor: pointer; font-size: 0.875rem; font-weight: 650; }
+.flow-reference div { margin-top: 8px; max-height: 220px; overflow: auto; overflow-wrap: anywhere; white-space: pre-wrap; font-size: 0.85rem; }
+
+@media (max-width: 670px) {
+  .flow-layout { grid-template-columns: 1fr; }
+  .flow-canvas { height: 400px; }
+  .flow-heading { align-items: flex-start; flex-direction: column; }
+}

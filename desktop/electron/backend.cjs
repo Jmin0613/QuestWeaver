@@ -20,6 +20,7 @@ function startBackend({ java, jar, dataDir, onStatus }) {
   const healthRequest = new AbortController();
   let checking = false;
   let connected = false;
+  let origin;
   let stopPromise;
   const startupTimer = setTimeout(() => fail('백엔드 시작 시간이 초과되었습니다.'), 60_000);
 
@@ -41,6 +42,29 @@ function startBackend({ java, jar, dataDir, onStatus }) {
     void stop();
   }
 
+  async function request(method, route, body) {
+    if (!connected || stopPromise) {
+      return { ok: false, message: '백엔드에 연결되어 있지 않습니다.' };
+    }
+    try {
+      const response = await fetch(origin + route, {
+        method,
+        headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        redirect: 'error',
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (response.status === 204) return { ok: true };
+      const data = await response.json().catch(() => null);
+      if (response.ok && data !== null) return { ok: true, data };
+      return { ok: false, message: response.status < 500 && data?.message
+        ? data.message : '요청을 처리하지 못했습니다. 다시 시도하세요.' };
+    } catch (error) {
+      console.error('[backend request]', method, error.message);
+      return { ok: false, message: '백엔드 응답을 확인할 수 없습니다. 연결 상태를 확인하세요.' };
+    }
+  }
+
   child.stdin.on('error', (error) => console.error('[backend stdin]', error.message));
   child.stderr.on('data', (chunk) => process.stderr.write(chunk));
   child.once('error', (error) => {
@@ -59,7 +83,8 @@ function startBackend({ java, jar, dataDir, onStatus }) {
     checking = true;
 
     try {
-      const response = await fetch(`http://127.0.0.1:${ready[1]}/api/status`, {
+      origin = `http://127.0.0.1:${ready[1]}`;
+      const response = await fetch(origin + '/api/status', {
         redirect: 'error',
         signal: AbortSignal.any([healthRequest.signal, AbortSignal.timeout(5_000)]),
       });
@@ -77,7 +102,7 @@ function startBackend({ java, jar, dataDir, onStatus }) {
     }
   });
 
-  return { stop };
+  return { stop, request };
 }
 
 module.exports = { startBackend };

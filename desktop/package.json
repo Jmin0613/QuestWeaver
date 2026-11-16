@@ -13,6 +13,7 @@
   "devDependencies": {
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@xyflow/react": "^12.12.1",
     "electron": "^45.3.3",
     "electron-builder": "^26.0.0",
     "react": "^19.2.0",
@@ -22,12 +23,25 @@
   },
   "build": {
     "appId": "com.jmin.questweaver",
-    "directories": { "output": "release" },
-    "files": ["electron/**/*", "dist/**/*"],
-    "extraResources": [
-      { "from": ".packaging/backend.jar", "to": "backend/questweaver.jar" },
-      { "from": ".packaging/runtime", "to": "runtime" }
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*"
     ],
-    "win": { "signAndEditExecutable": false }
+    "extraResources": [
+      {
+        "from": ".packaging/backend.jar",
+        "to": "backend/questweaver.jar"
+      },
+      {
+        "from": ".packaging/runtime",
+        "to": "runtime"
+      }
+    ],
+    "win": {
+      "signAndEditExecutable": false
+    }
   }
 }

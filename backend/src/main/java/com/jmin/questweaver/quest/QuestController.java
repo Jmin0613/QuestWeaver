@@ -75,6 +75,16 @@ class QuestController {
         return store.save(id, input);
     }
 
+    @GetMapping("/quests/{id}/flow")
+    FlowDocument flow(@PathVariable UUID id) {
+        return store.flow(id);
+    }
+
+    @PutMapping("/quests/{id}/flow")
+    FlowDocument saveFlow(@PathVariable UUID id, @Valid @RequestBody FlowDocument document) {
+        return store.saveFlow(id, document);
+    }
+
     @DeleteMapping("/quests/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void delete(@PathVariable UUID id) {
