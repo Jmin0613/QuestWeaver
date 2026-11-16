@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QuestEditor } from './QuestEditor';
 import { FlowEditor } from './FlowEditor';
+import { FlowPreview } from './FlowPreview';
 import { errorMessage, formatDate, questTitle, request, stateLabels, useResource } from './api';
 import type { BackendStatus, Option, QuestDetail, QuestSummary, WritingState } from './api';
 import './style.css';
@@ -157,8 +158,8 @@ function QuestView({ id, onBack, onEdit, onFlow }: {
         </dl>
         <h3>퀘스트 원문</h3>
         <div className="quest-body">{detail.body?.trim() ? detail.body : '입력한 원문이 없습니다.'}</div>
+        <FlowPreview questId={id} onEdit={() => onFlow(detail)} disabled={deleting} />
         <div className="actions">
-          <button type="button" disabled={deleting} onClick={() => onFlow(detail)}>플로우 편집</button>
           <button type="button" className="primary" disabled={deleting} onClick={() => onEdit(detail)}>수정</button>
           <button type="button" className="danger" disabled={deleting} onClick={() => void remove(questTitle(info.title))}>
             {deleting ? '삭제 중…' : '삭제'}

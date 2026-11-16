@@ -79,7 +79,7 @@ main.flow-main {
   border: 2px solid white;
 }
 
-.flow-canvas button.flow-link-label {
+.flow-canvas .flow-link-label {
   position: absolute;
   pointer-events: auto;
   min-height: 0;
@@ -95,6 +95,22 @@ main.flow-main {
 }
 
 .flow-canvas button.flow-link-label.selected { border-color: #344c94; color: #273d83; }
+
+.flow-preview { margin-top: 20px; }
+.flow-preview > .section-heading { margin-bottom: 10px; }
+.flow-preview h3 { margin: 0; }
+.flow-canvas.flow-preview-canvas { height: clamp(280px, 46vh, 440px); }
+.flow-preview-canvas .react-flow__handle { visibility: hidden; }
+.flow-preview-canvas .react-flow__node { cursor: pointer; }
+.flow-preview-canvas .react-flow__edge-interaction { pointer-events: none; }
+.flow-preview-step {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid #dce2ed;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.flow-preview-step p { margin: 6px 0 0; white-space: pre-wrap; }
 
 .flow-sidebar {
   padding: 13px;

@@ -1,14 +1,14 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import {
-  Background, Panel, ReactFlow, ReactFlowProvider, useEdgesState, useNodesState, useReactFlow,
+  Background, ReactFlow, ReactFlowProvider, useEdgesState, useNodesState, useReactFlow,
 } from '@xyflow/react';
 import type { Connection } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import './flow.css';
 import { errorMessage, questTitle, request, useResource } from './api';
 import type { QuestDetail } from './api';
-import { asEdge, asNode, flowEdgeTypes, flowNodeTypes, graphData, withLanes } from './flowElements';
+import { asEdge, asNode, FlowControls, flowEdgeTypes, flowNodeTypes, graphData, withLanes } from './flowElements';
 import type { LinkEdge, StepNode } from './flowElements';
 import { stepLabels } from './flowModel';
 import type { FlowDocument, StepKind } from './flowModel';
@@ -184,12 +184,7 @@ function FlowWorkspace({ quest, onBack, initial, route }: Props & { initial: Flo
           >
             <Background gap={22} color="#cad4e5" />
             {nodes.length === 0 && <div className="flow-empty">아직 단계가 없습니다. 위 버튼으로 단계를 추가하세요.</div>}
-            <Panel position="bottom-left" className="flow-controls">
-              <button type="button" title="확대" aria-label="확대" onClick={() => void view.zoomIn()}>+</button>
-              <button type="button" title="축소" aria-label="축소" onClick={() => void view.zoomOut()}>−</button>
-              <button type="button" disabled={!nodes.length}
-                onClick={() => void view.fitView({ padding: 0.24, maxZoom: 1.3, includeHiddenNodes: true })}>전체 보기</button>
-            </Panel>
+            <FlowControls empty={!nodes.length} />
           </ReactFlow>
         </div>
         <aside className="flow-sidebar">
