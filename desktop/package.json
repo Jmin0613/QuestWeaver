@@ -1,0 +1,33 @@
+{
+  "name": "questweaver-desktop",
+  "productName": "QuestWeaver",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Quest planning desktop application",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "node scripts/prepare-backend.cjs && npm run build && electron .",
+    "build": "tsc --noEmit && vite build --base=./",
+    "dist:win": "node scripts/prepare-backend.cjs --package && npm run build && electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "electron": "^45.3.3",
+    "electron-builder": "^26.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "typescript": "~5.9.3",
+    "vite": "^8.0.0"
+  },
+  "build": {
+    "appId": "com.jmin.questweaver",
+    "directories": { "output": "release" },
+    "files": ["electron/**/*", "dist/**/*"],
+    "extraResources": [
+      { "from": ".packaging/backend.jar", "to": "backend/questweaver.jar" },
+      { "from": ".packaging/runtime", "to": "runtime" }
+    ],
+    "win": { "signAndEditExecutable": false }
+  }
+}

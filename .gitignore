@@ -1,0 +1,61 @@
+# 참고 문서
+/HELP.md
+/backend/HELP.md
+
+# Java / Gradle
+.gradle/
+build/
+out/
+*.class
+
+# Gradle Wrapper는 Git에 포함
+!gradle-wrapper.jar
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# 기타 IDE
+.vscode/
+.apt_generated/
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache/
+bin/
+
+# Node / Electron / React
+node_modules/
+dist/
+dist-electron/
+release/
+/desktop/.packaging/
+/desktop/.npm-cache/
+*.exe
+*.msi
+*.blockmap
+
+# 환경변수
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+
+# 로그
+*.log
+
+# H2 로컬 데이터
+*.mv.db
+*.trace.db
+*.lock.db
+
+# 운영체제 생성 파일
+.DS_Store
+Thumbs.db
