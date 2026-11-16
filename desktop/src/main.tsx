@@ -5,6 +5,8 @@ import { FlowEditor } from './FlowEditor';
 import { FlowPreview } from './FlowPreview';
 import { errorMessage, formatDate, questTitle, request, stateLabels, useResource } from './api';
 import type { BackendStatus, Option, QuestDetail, QuestSummary, WritingState } from './api';
+import { useNavigationGuard } from './useCloseGuard';
+import type { NavigationGuard } from './useCloseGuard';
 import './style.css';
 
 type Filters = { search: string; gameId: string; regionId: string };
@@ -110,16 +112,18 @@ function LoadError({ message, retry }: { message: string; retry: () => void }) {
   return <div className="error" role="alert">{message} <button type="button" onClick={retry}>다시 불러오기</button></div>;
 }
 
-function QuestView({ id, onBack, onEdit, onFlow }: {
+function QuestView({ id, onBack, onEdit, onFlow, navigationGuard }: {
   id: string;
   onBack: () => void;
   onEdit: (quest: QuestDetail) => void;
   onFlow: (quest: QuestDetail) => void;
+  navigationGuard: NavigationGuard;
 }) {
   const quest = useResource<QuestDetail>(`/api/quests/${id}`);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const pending = useRef(false);
+  useNavigationGuard(navigationGuard, pending);
 
   async function remove(title: string) {
     if (pending.current || !window.confirm(`‘${title}’ 퀘스트를 삭제할까요?`)) return;
@@ -179,6 +183,7 @@ function App() {
   });
   const [screen, setScreen] = useState<Screen>(listScreen);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const navigationGuard = useRef<(() => boolean) | null>(null);
   const games = useResource<Option[]>(backend.state === 'starting' ? null : '/api/games');
 
   useEffect(() => window.questWeaver.onBackendStatus(setBackend), []);
@@ -186,10 +191,16 @@ function App() {
   const backToList = () => setScreen(listScreen);
   const openQuest = (id: string) => setScreen({ kind: 'detail', id });
 
+  function goToList() {
+    if (screen.kind === 'list' || navigationGuard.current?.() === false) return;
+    backToList();
+  }
+
   return (
     <main className={screen.kind === 'flow' ? 'flow-main' : undefined}>
       <header className="app-header">
-        <h1>QuestWeaver</h1>
+        <h1><button type="button" className="app-logo" onClick={goToList}
+          aria-label="QuestWeaver 퀘스트 목록">QuestWeaver</button></h1>
         <span className={`status connection ${backend.state}`} role="status" title={backend.message}>
           {connectionLabels[backend.state]}
         </span>
@@ -198,13 +209,13 @@ function App() {
       {screen.kind === 'list' && <QuestList filters={filters} setFilters={setFilters} games={games}
         connected={backend.state === 'connected'} onOpen={openQuest}
         onAdd={() => setScreen({ kind: 'editor' })} />}
-      {screen.kind === 'detail' && <QuestView key={screen.id} id={screen.id} onBack={backToList}
+      {screen.kind === 'detail' && <QuestView key={screen.id} id={screen.id} onBack={backToList} navigationGuard={navigationGuard}
         onEdit={(quest) => setScreen({ kind: 'editor', quest })}
         onFlow={(quest) => setScreen({ kind: 'flow', quest })} />}
-      {screen.kind === 'editor' && <QuestEditor initial={screen.quest} games={games.data ?? []}
+      {screen.kind === 'editor' && <QuestEditor initial={screen.quest} games={games.data ?? []} navigationGuard={navigationGuard}
         gamesError={games.error} reloadGames={games.reload} onSaved={openQuest}
         onBack={() => screen.quest ? openQuest(screen.quest.summary.id) : backToList()} />}
-      {screen.kind === 'flow' && <FlowEditor quest={screen.quest}
+      {screen.kind === 'flow' && <FlowEditor quest={screen.quest} navigationGuard={navigationGuard}
         onBack={() => openQuest(screen.quest.summary.id)} />}
     </main>
   );

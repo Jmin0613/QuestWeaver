@@ -13,17 +13,19 @@ import { AiFlowGenerator } from './AiFlowGenerator';
 import type { LinkEdge, StepNode } from './flowElements';
 import { stepLabels } from './flowModel';
 import type { FlowDocument, StepKind } from './flowModel';
-import { useCloseGuard } from './useCloseGuard';
+import { useCloseGuard, useNavigationGuard } from './useCloseGuard';
+import type { NavigationGuard } from './useCloseGuard';
 
-type Props = { quest: QuestDetail; onBack: () => void };
+type Props = { quest: QuestDetail; onBack: () => void; navigationGuard: NavigationGuard };
 type InspectionWarning = { code: string; stepId: string | null; reason: string };
 const kinds = Object.keys(stepLabels) as StepKind[];
 
-export function FlowEditor({ quest, onBack }: Props) {
+export function FlowEditor({ quest, onBack, navigationGuard }: Props) {
   const route = `/api/quests/${quest.summary.id}/flow`;
   const flow = useResource<FlowDocument>(route);
   if (flow.data) {
-    return <ReactFlowProvider><FlowWorkspace quest={quest} onBack={onBack} initial={flow.data} route={route} /></ReactFlowProvider>;
+    return <ReactFlowProvider><FlowWorkspace quest={quest} onBack={onBack}
+      navigationGuard={navigationGuard} initial={flow.data} route={route} /></ReactFlowProvider>;
   }
 
   return (
@@ -38,7 +40,7 @@ export function FlowEditor({ quest, onBack }: Props) {
   );
 }
 
-function FlowWorkspace({ quest, onBack, initial, route }: Props & { initial: FlowDocument; route: string }) {
+function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props & { initial: FlowDocument; route: string }) {
   const canvas = useRef<HTMLDivElement>(null);
   const view = useReactFlow<StepNode, LinkEdge>();
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.steps.map(asNode));
@@ -71,6 +73,8 @@ function FlowWorkspace({ quest, onBack, initial, route }: Props & { initial: Flo
     : inspection.warnings.length ? '경고 있음' : '경고 없음';
   const dirty = !!appliedDraft || signature !== savedGraph;
   useCloseGuard(dirty || saving);
+  const canLeave = useNavigationGuard(navigationGuard, pending,
+    dirty ? '저장하지 않은 플로우 변경이 있습니다. 편집 화면을 나갈까요?' : undefined);
 
   useEffect(() => {
     if (!appliedDraft) return;
@@ -170,8 +174,7 @@ function FlowWorkspace({ quest, onBack, initial, route }: Props & { initial: Flo
   }
 
   function back() {
-    if (pending.current) return;
-    if (!dirty || window.confirm('저장하지 않은 플로우 변경이 있습니다. 상세로 돌아갈까요?')) onBack();
+    if (canLeave()) onBack();
   }
 
   async function inspect() {

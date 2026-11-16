@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { errorMessage, request, useResource } from './api';
 import type { Option, QuestDetail, QuestFields, WritingState } from './api';
-import { useCloseGuard } from './useCloseGuard';
+import { useCloseGuard, useNavigationGuard } from './useCloseGuard';
+import type { NavigationGuard } from './useCloseGuard';
 
 type Props = {
   initial?: QuestDetail;
@@ -9,6 +10,7 @@ type Props = {
   gamesError?: string;
   reloadGames: () => void;
   onBack: () => void;
+  navigationGuard: NavigationGuard;
   onSaved: (id: string) => void;
 };
 
@@ -22,7 +24,7 @@ function fieldsFrom(quest?: QuestDetail): QuestFields {
   };
 }
 
-export function QuestEditor({ initial, games, gamesError, reloadGames, onBack, onSaved }: Props) {
+export function QuestEditor({ initial, games, gamesError, reloadGames, onBack, onSaved, navigationGuard }: Props) {
   const [id] = useState(() => initial?.summary.id ?? crypto.randomUUID());
   const isRegistered = initial?.summary.writingState === 'REGISTERED';
   const [baseline, setBaseline] = useState(() => fieldsFrom(initial));
@@ -38,6 +40,8 @@ export function QuestEditor({ initial, games, gamesError, reloadGames, onBack, o
   const dirty = name !== '' || (Object.keys(fields) as (keyof QuestFields)[])
     .some((key) => fields[key] !== baseline[key]);
   useCloseGuard(dirty || busy);
+  const canLeave = useNavigationGuard(navigationGuard, running,
+    dirty ? '저장하지 않은 변경이 있습니다. 작성 화면을 나갈까요?' : undefined);
 
   function change(update: Partial<QuestFields>) {
     setFields((previous) => ({ ...previous, ...update }));
@@ -46,8 +50,7 @@ export function QuestEditor({ initial, games, gamesError, reloadGames, onBack, o
   }
 
   function back() {
-    if (running.current) return;
-    if (!dirty || window.confirm('저장하지 않은 변경이 있습니다. 작성 화면을 나갈까요?')) onBack();
+    if (canLeave()) onBack();
   }
 
   async function submit(action: () => Promise<void>) {
