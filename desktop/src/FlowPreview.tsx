@@ -4,7 +4,7 @@ import '@xyflow/react/dist/style.css';
 import './flow.css';
 import { errorMessage, useResource } from './api';
 import { renderFlowPng } from './flowPng';
-import { asEdge, asNode, FlowControls, flowEdgeTypes, flowFitOptions, flowNodeTypes, withLanes } from './flowElements';
+import { asEdge, asNode, FlowControls, flowEdgeTypes, flowFitOptions, flowNodeTypes, manualCurveBounds, withLanes } from './flowElements';
 import { stepLabels } from './flowModel';
 import type { FlowDocument } from './flowModel';
 
@@ -72,6 +72,7 @@ export function PreviewChart({ flow, id }: { flow: FlowDocument; id?: string }) 
     ariaLabel: step.title.trim() || '제목 없는 단계',
   })), [flow.steps, selectedId]);
   const edges = useMemo(() => withLanes(flow.links.map(asEdge)), [flow.links]);
+  const bounds = useMemo(() => manualCurveBounds(nodes, edges), [nodes, edges]);
 
   return (
     <>
@@ -91,7 +92,8 @@ export function PreviewChart({ flow, id }: { flow: FlowDocument; id?: string }) 
           edgeTypes={flowEdgeTypes}
           onNodeClick={(_, node) => setSelectedId(node.id)}
           onPaneClick={() => setSelectedId(undefined)}
-          fitView
+          fitView={!bounds}
+          onInit={bounds ? (instance) => void instance.fitBounds(bounds, { padding: 0.2 }) : undefined}
           fitViewOptions={flowFitOptions}
           minZoom={0.1}
           maxZoom={4}
@@ -107,7 +109,7 @@ export function PreviewChart({ flow, id }: { flow: FlowDocument; id?: string }) 
           preventScrolling={false}
         >
           <Background gap={22} color="#cad4e5" />
-          <FlowControls />
+          <FlowControls bounds={bounds} />
         </ReactFlow>
       </div>
       {selected && <div className="flow-preview-step" aria-live="polite">

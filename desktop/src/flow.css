@@ -78,6 +78,51 @@ main.flow-main {
   background: #445884;
   border: 2px solid white;
 }
+.flow-step .react-flow__handle.target {
+  background: #fff;
+  border-color: #445884;
+}
+.flow-step .react-flow__handle:hover { outline: 2px solid #7592cd; outline-offset: 1px; }
+.flow-canvas .react-flow__edge.selected .react-flow__edgeupdater {
+  fill: #fff;
+  stroke: #344c94;
+  stroke-width: 2;
+  cursor: grab;
+}
+.flow-canvas .curve-guide { fill: none; stroke: #ba8718; stroke-dasharray: 4 4; pointer-events: none; }
+.flow-canvas button.curve-handle {
+  position: absolute;
+  z-index: 2;
+  min-height: 0;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  transform: translate(-50%, -50%) rotate(45deg);
+  pointer-events: auto;
+  touch-action: none;
+  border: 2px solid #976a10;
+  border-radius: 3px;
+  background: #ffda63;
+  cursor: grab;
+}
+.flow-canvas button.curve-handle:hover { background: #ffe48b; }
+.flow-canvas button.curve-handle:active { cursor: grabbing; }
+.flow-canvas button.curve-handle-center {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff6d4;
+}
+.flow-canvas button.curve-handle-center::after {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: auto;
+  border-radius: 50%;
+  background: #976a10;
+}
 
 .flow-canvas .flow-link-label {
   position: absolute;

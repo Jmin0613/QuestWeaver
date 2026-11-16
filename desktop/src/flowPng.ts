@@ -1,4 +1,5 @@
-import { asEdge, linkCurve, stepHeight, stepWidth, withLanes } from './flowElements';
+import { asEdge, stepHeight, stepWidth, withLanes } from './flowElements';
+import { linkCurve, portAnchor } from './flowGeometry';
 import { stepLabels } from './flowModel';
 import type { FlowDocument, StepKind } from './flowModel';
 
@@ -76,18 +77,17 @@ export async function renderFlowPng(flow: FlowDocument, game: string, quest: str
     const from = cards.get(edge.source);
     const to = cards.get(edge.target);
     if (!from || !to) throw new Error('연결된 단계를 찾을 수 없어 PNG를 만들 수 없습니다.');
-    const x1 = from.x + from.width, y1 = from.y + from.height / 2;
-    const x2 = to.x, y2 = to.y + to.height / 2;
-    const curve = linkCurve(x1, y1, x2, y2, edge.data?.lane ?? 0);
-    include(curve.controlX1, curve.controlY1);
-    include(curve.controlX2, curve.controlY2);
+    const start = portAnchor(from, from.direction, 'source');
+    const end = portAnchor(to, to.direction, 'target');
+    const curve = linkCurve(start, end, edge.data?.lane ?? 0, edge.data?.curve);
+    for (const point of Object.values(curve)) include(point.x, point.y);
     const condition = edge.data?.condition.trim();
     let label;
     if (condition) {
       const text = wrap(ctx, condition, 230);
       const width = Math.max(...text.map((row) => ctx.measureText(row).width)) + 16;
       const height = text.length * 17 + 10;
-      const box = { x: curve.labelX - width / 2, y: curve.labelY - height - 5, width, height };
+      const box = { x: curve.midpoint.x - width / 2, y: curve.midpoint.y - height - 5, width, height };
       let collision = occupied.find((other) => intersects(box, other));
       while (collision) {
         box.y = collision.y - height - 6;
@@ -98,7 +98,7 @@ export async function renderFlowPng(flow: FlowDocument, game: string, quest: str
       include(box.x + width, box.y + height);
       label = { ...box, text };
     }
-    return { x1, y1, x2, y2, ...curve, label };
+    return { start, end, ...curve, label };
   });
 
   ctx.font = `700 23px ${fontFamily}`;
@@ -128,27 +128,27 @@ export async function renderFlowPng(flow: FlowDocument, game: string, quest: str
   text(['React Flow · xyflow.com'], margin, height - 26, 15, 12, 500, '#475674');
   ctx.translate(margin - bounds.left, margin + header - bounds.top);
 
-  for (const { x1, y1, x2, y2, controlX1, controlY1, controlX2, controlY2, labelX, labelY, label } of lines) {
+  for (const { start, end, startControl, midpoint, endControl, label } of lines) {
     ctx.strokeStyle = '#53658c';
     ctx.lineWidth = 1.8;
     ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.bezierCurveTo(controlX1, controlY1, controlX2, controlY2, x2, y2);
+    ctx.moveTo(start.x, start.y);
+    ctx.bezierCurveTo(startControl.x, startControl.y, endControl.x, endControl.y, end.x, end.y);
     ctx.stroke();
-    const angle = Math.atan2(y2 - controlY2, x2 - controlX2);
+    const angle = Math.atan2(end.y - endControl.y, end.x - endControl.x);
     ctx.fillStyle = '#53658c';
     ctx.beginPath();
-    ctx.moveTo(x2, y2);
+    ctx.moveTo(end.x, end.y);
     for (const offset of [-0.45, 0.45]) {
-      ctx.lineTo(x2 - 9 * Math.cos(angle + offset), y2 - 9 * Math.sin(angle + offset));
+      ctx.lineTo(end.x - 9 * Math.cos(angle + offset), end.y - 9 * Math.sin(angle + offset));
     }
     ctx.closePath();
     ctx.fill();
     if (label) {
       ctx.lineWidth = 0.8;
       ctx.beginPath();
-      ctx.moveTo(labelX, labelY);
-      ctx.lineTo(labelX, label.y + label.height);
+      ctx.moveTo(midpoint.x, midpoint.y);
+      ctx.lineTo(midpoint.x, label.y + label.height);
       ctx.stroke();
     }
   }

@@ -72,6 +72,7 @@ class AiFlowDraftTests {
         assertThat(graph.at("/steps/3/x")).isEqualTo(graph.at("/steps/4/x"));
         var occupied = new HashSet<String>();
         for (JsonNode step : graph.path("steps")) {
+            assertThat(step.path("direction").asString()).isEqualTo("HORIZONTAL");
             assertThat(occupied.add(step.path("x") + ":" + step.path("y"))).isTrue();
         }
         assertThat(send("GET", flow, null, 200)).isEqualTo(json.valueToTree(FlowDocument.empty()));

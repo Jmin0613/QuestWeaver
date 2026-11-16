@@ -17,6 +17,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -38,6 +39,8 @@ class QuestFlowTests {
     void savesEditsAndClearsAFlowIndependentlyOfTheQuest() throws Exception {
         String quest = newDraft("순찰 훈련");
         String flow = quest + "/flow";
+        jdbc.update("update quest set updated_at = dateadd('SECOND', -1, updated_at) where id = ?",
+                UUID.fromString(quest.substring(quest.lastIndexOf('/') + 1)));
         JsonNode original = read(quest);
         assertThat(read(flow)).isEqualTo(json.valueToTree(FlowDocument.empty()));
 
@@ -124,6 +127,56 @@ class QuestFlowTests {
         send("POST", "/api/flow/inspect", invalid, 400);
         send("PUT", flow, unsaved, 200);
         assertThat(read(flow)).isEqualTo(json.valueToTree(unsaved));
+    }
+
+    @Test
+    void restoresLegacyLinksAndPersistsStepDirections() throws Exception {
+        String quest = newDraft("연결 위치");
+        String flow = quest + "/flow";
+        UUID id = UUID.fromString(quest.substring(quest.lastIndexOf('/') + 1));
+        FlowDocument example = example();
+        JsonNode legacy = json.valueToTree(example);
+        for (JsonNode step : legacy.path("steps")) {
+            ((ObjectNode) step).remove("direction");
+        }
+        ((ObjectNode) legacy.at("/links/0")).put("fromSide", "BOTTOM").put("toSide", "TOP");
+        ((ObjectNode) legacy.at("/links/5")).put("fromSide", "LEFT").put("toSide", "RIGHT");
+        jdbc.update("insert into quest_flow (quest_id, document) values (?, ?)", id, json.writeValueAsString(legacy));
+        assertThat(read(flow)).isEqualTo(json.valueToTree(example));
+
+        JsonNode updated = json.valueToTree(example);
+        ((ObjectNode) updated.at("/steps/0")).put("direction", "VERTICAL");
+        ((ObjectNode) updated.at("/steps/2")).put("direction", "VERTICAL");
+        send("PUT", flow, updated, 200);
+        assertThat(read(flow)).isEqualTo(updated);
+        assertThat(send("POST", "/api/flow/inspect", updated, 200))
+                .isEqualTo(send("POST", "/api/flow/inspect", example, 200));
+
+        JsonNode invalid = updated.deepCopy();
+        ((ObjectNode) invalid.at("/steps/0")).put("direction", "DIAGONAL");
+        send("PUT", flow, invalid, 400);
+        assertThat(read(flow)).isEqualTo(updated);
+    }
+
+    @Test
+    void persistsRelativeCurveOffsetsWithoutAffectingInspection() throws Exception {
+        String flow = newDraft("수동 곡선") + "/flow";
+        FlowDocument original = example();
+        JsonNode manual = json.valueToTree(original);
+        ((ObjectNode) manual.at("/links/0")).set("curve", json.valueToTree(
+                new FlowDocument.Curve(new FlowDocument.Offset(130.0, -420.0), new FlowDocument.Offset(-90.0, 310.0))));
+        send("PUT", flow, manual, 200);
+        assertThat(read(flow)).isEqualTo(manual);
+        assertThat(send("POST", "/api/flow/inspect", manual, 200))
+                .isEqualTo(send("POST", "/api/flow/inspect", original, 200));
+
+        JsonNode incomplete = manual.deepCopy();
+        ((ObjectNode) incomplete.at("/links/0/curve")).remove("end");
+        send("PUT", flow, incomplete, 400);
+        assertThat(read(flow)).isEqualTo(manual);
+
+        send("PUT", flow, original, 200);
+        assertThat(read(flow).at("/links/0/curve").isMissingNode()).isTrue();
     }
 
     private String newDraft(String title) throws Exception {

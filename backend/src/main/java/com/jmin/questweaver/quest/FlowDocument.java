@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -17,11 +19,34 @@ record FlowDocument(
         @NotNull @Valid Viewport viewport) {
 
     enum Kind { START, PROGRESS, BRANCH, END }
+    enum Direction { HORIZONTAL, VERTICAL }
 
     record Step(@NotNull UUID id, @NotNull Kind kind, @NotNull @Size(max = 200) String title,
-                @NotNull String description, @NotNull Double x, @NotNull Double y) {}
+                @NotNull String description, @NotNull Double x, @NotNull Double y, Direction direction) {
+        Step {
+            direction = direction == null ? Direction.HORIZONTAL : direction;
+        }
 
-    record Link(@NotNull UUID id, @NotNull UUID from, @NotNull UUID to, @NotNull String condition) {}
+        Step(UUID id, Kind kind, String title, String description, Double x, Double y) {
+            this(id, kind, title, description, x, y, Direction.HORIZONTAL);
+        }
+    }
+
+    @JsonIgnoreProperties({"fromSide", "toSide"})
+    record Link(@NotNull UUID id, @NotNull UUID from, @NotNull UUID to, @NotNull String condition,
+                @Valid @JsonInclude(JsonInclude.Include.NON_NULL) Curve curve) {
+        Link(UUID id, UUID from, UUID to, String condition) {
+            this(id, from, to, condition, null);
+        }
+    }
+
+    record Curve(@NotNull @Valid Offset start, @NotNull @Valid Offset end) {}
+
+    record Offset(@NotNull Double x, @NotNull Double y) {
+        boolean finite() {
+            return Double.isFinite(x) && Double.isFinite(y);
+        }
+    }
 
     record Viewport(@NotNull Double x, @NotNull Double y, @NotNull Double zoom) {}
 
@@ -47,6 +72,9 @@ record FlowDocument(
             }
             if (!stepIds.contains(link.from()) || !stepIds.contains(link.to())) {
                 throw badRequest("연결선은 존재하는 단계의 ID를 참조해야 합니다.");
+            }
+            if (link.curve() != null && (!link.curve().start().finite() || !link.curve().end().finite())) {
+                throw badRequest("연결선의 곡선 제어점 좌표를 확인하세요.");
             }
         }
 

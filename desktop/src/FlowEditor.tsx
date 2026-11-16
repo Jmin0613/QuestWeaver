@@ -8,11 +8,11 @@ import '@xyflow/react/dist/style.css';
 import './flow.css';
 import { errorMessage, questTitle, request, useResource } from './api';
 import type { QuestDetail } from './api';
-import { asEdge, asNode, FlowControls, flowEdgeTypes, flowFitOptions, flowNodeTypes, graphData, withLanes } from './flowElements';
+import { asEdge, asNode, FlowControls, flowEdgeTypes, flowFitOptions, flowNodeTypes, graphData, manualCurveBounds, updateNodeData, withLanes } from './flowElements';
 import { AiFlowGenerator } from './AiFlowGenerator';
 import type { LinkEdge, StepNode } from './flowElements';
-import { stepLabels } from './flowModel';
-import type { FlowDocument, StepKind } from './flowModel';
+import { directionLabels, stepLabels } from './flowModel';
+import type { CurveOffsets, Direction, FlowDocument, StepKind } from './flowModel';
 import { useCloseGuard, useNavigationGuard } from './useCloseGuard';
 import type { NavigationGuard } from './useCloseGuard';
 
@@ -60,12 +60,19 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
     setEdges((current) => current.map((edge) => (edge.selected ?? false) === (edge.id === id)
       ? edge : { ...edge, selected: edge.id === id }));
   }, [setNodes, setEdges]);
-  const renderedEdges = useMemo(() => withLanes(edges, selectLink), [edges, selectLink]);
+  const updateCurve = useCallback((id: string, curve?: CurveOffsets) => {
+    if (pending.current) return;
+    setEdges((current) => current.map((edge) => edge.id === id
+      ? { ...edge, data: { condition: '', ...edge.data, curve } } : edge));
+  }, [setEdges]);
+  const renderedEdges = useMemo(() => withLanes(edges, selectLink, saving ? undefined : updateCurve).map((edge) => ({
+    ...edge, reconnectable: !saving && !!edge.selected,
+  })), [edges, selectLink, saving, updateCurve]);
   const graph = useMemo(() => graphData(nodes, edges), [nodes, edges]);
   const signature = JSON.stringify(graph);
   const inspectionSignature = JSON.stringify({
     steps: graph.steps.map(({ id, kind, title, description }) => ({ id, kind, title, description })),
-    links: graph.links,
+    links: graph.links.map(({ id, from, to, condition }) => ({ id, from, to, condition })),
   });
   const needsInspection = inspection !== undefined && inspection.signature !== inspectionSignature;
   const inspectionStatus = !inspection ? '검사 전'
@@ -127,16 +134,24 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
     queueMicrotask(() => selectLink(edge.id));
   }
 
+  function reconnect(edge: LinkEdge, connection: Connection) {
+    if (pending.current) return;
+    setEdges((current) => current.map((item) => item.id === edge.id ? { ...item, ...connection } : item));
+  }
+
   function updateStep(update: Partial<StepNode['data']>) {
     if (!step || pending.current) return;
-    setNodes((current) => current.map((node) => node.id === step.id
-      ? { ...node, data: { ...node.data, ...update } } : node));
+    setNodes((current) => current.map((node) => node.id === step.id ? updateNodeData(node, update) : node));
+    if (update.direction && update.direction !== step.data.direction) {
+      setEdges((current) => current.map((edge) => edge.data?.curve && (edge.source === step.id || edge.target === step.id)
+        ? { ...edge, data: { ...edge.data, curve: undefined } } : edge));
+    }
   }
 
   function updateCondition(condition: string) {
     if (!link || pending.current) return;
     setEdges((current) => current.map((edge) => edge.id === link.id
-      ? { ...edge, data: { condition }, ariaLabel: condition || '퀘스트 연결선' } : edge));
+      ? { ...edge, data: { ...edge.data, condition }, ariaLabel: condition || '퀘스트 연결선' } : edge));
   }
 
   function removeSelection() {
@@ -222,11 +237,11 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
         {kinds.map((kind) => <button key={kind} type="button" disabled={saving} onClick={() => addStep(kind)}>
           {stepLabels[kind]} 단계 추가
         </button>)}
-        {dirty && <span className="flow-unsaved">저장하지 않은 변경</span>}
+        <span className="flow-unsaved" style={{ visibility: dirty ? 'visible' : 'hidden' }}>저장하지 않은 변경</span>
       </div>
       <AiFlowGenerator route={route} ready={!saving} hasSource={!!quest.body?.trim()} onApply={applyDraft} />
       {saving && <p role="status">플로우를 저장하고 있습니다.</p>}
-      {saved && !dirty && <p className="success" role="status">플로우를 저장했습니다.</p>}
+      {saved && <p className="success" style={{ visibility: dirty ? 'hidden' : 'visible' }} role="status">플로우를 저장했습니다.</p>}
       {error && <p className="error" role="alert">{error}</p>}
       <section className="flow-inspection" aria-label="플로우 검사 결과">
         <p role="status"><strong>{inspectionStatus}</strong>{checking && ' · 플로우 검사 중…'}</p>
@@ -248,6 +263,7 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={connect}
+            onReconnect={reconnect}
             nodeTypes={flowNodeTypes}
             edgeTypes={flowEdgeTypes}
             defaultViewport={initial.viewport}
@@ -256,24 +272,32 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
             deleteKeyCode={null}
             nodesDraggable={!saving}
             nodesConnectable={!saving}
-            edgesReconnectable={false}
+            edgesReconnectable={!saving}
+            reconnectRadius={6}
             selectionKeyCode={null}
             multiSelectionKeyCode={null}
           >
             <Background gap={22} color="#cad4e5" />
             {nodes.length === 0 && <div className="flow-empty">아직 단계가 없습니다. 위 버튼으로 단계를 추가하세요.</div>}
-            <FlowControls empty={!nodes.length} />
+            <FlowControls empty={!nodes.length} bounds={manualCurveBounds(nodes, renderedEdges)} />
           </ReactFlow>
         </div>
         <aside className="flow-sidebar">
           <section aria-labelledby="flow-properties-heading">
             <h3 id="flow-properties-heading">선택한 요소</h3>
-            {!step && !link && <p className="hint">단계나 연결선을 선택하면 속성을 편집할 수 있습니다. 연결하려면 오른쪽 점에서 다음 단계의 왼쪽 점으로 끌어 놓으세요.</p>}
+            {!step && !link && <p className="hint">단계나 연결선을 선택하면 속성을 편집할 수 있습니다. 채워진 출력 점에서 도착 단계의 흰 입력 점으로 끌어 놓으세요.</p>}
             {step && <fieldset disabled={saving}>
               <label htmlFor="flow-step-kind">단계 종류</label>
               <select id="flow-step-kind" value={step.data.kind} onChange={(event) => updateStep({ kind: event.target.value as StepKind })}>
                 {kinds.map((kind) => <option key={kind} value={kind}>{stepLabels[kind]}</option>)}
               </select>
+              <label htmlFor="flow-step-direction">연결 방향</label>
+              <select id="flow-step-direction" value={step.data.direction}
+                onChange={(event) => updateStep({ direction: event.target.value as Direction })}>
+                {Object.entries(directionLabels).map(([direction, label]) =>
+                  <option key={direction} value={direction}>{label}</option>)}
+              </select>
+              <p className="hint">연결 방향을 바꾸면 이 단계에 붙은 수동 곡선이 초기화됩니다.</p>
               <label htmlFor="flow-step-title">단계 제목</label>
               <input id="flow-step-title" maxLength={200} value={step.data.title} onChange={(event) => updateStep({ title: event.target.value })} />
               <label htmlFor="flow-step-description">단계 설명</label>
@@ -283,9 +307,11 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
             </fieldset>}
             {!step && link && <fieldset disabled={saving}>
               <p className="flow-endpoints">{titleFor(link.source)} → {titleFor(link.target)}</p>
+              <p className="hint">선의 끝점을 끌면 연결할 단계를 바꿀 수 있습니다.</p>
               <label htmlFor="flow-link-condition">조건 또는 선택지</label>
               <textarea id="flow-link-condition" rows={3} value={link.data?.condition ?? ''}
                 onChange={(event) => updateCondition(event.target.value)} />
+              <button type="button" disabled={!link.data?.curve} onClick={() => updateCurve(link.id)}>곡선 초기화</button>
               <button type="button" className="danger" onClick={removeSelection}>연결선 삭제</button>
             </fieldset>}
           </section>
