@@ -97,6 +97,12 @@ if (!app.requestSingleInstanceLock()) {
       },
     });
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    // Let the renderer route history shortcuts to either the chart or the focused text field.
+    window.webContents.on('before-input-event', (_event, input) => {
+      window.webContents.setIgnoreMenuShortcuts(
+        input.control && !input.alt && ['z', 'y'].includes(input.key.toLowerCase()),
+      );
+    });
     window.webContents.on('will-navigate', (event) => event.preventDefault());
     window.on('close', (event) => {
       if (!closeGuard) return;

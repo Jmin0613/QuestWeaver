@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import {
   applyNodeChanges, Background, ReactFlow, ReactFlowProvider, useEdgesState, useNodesState, useReactFlow,
@@ -15,6 +15,7 @@ import { directionLabels, stepLabels } from './flowModel';
 import type { CurveOffsets, Direction, FlowDocument, StepKind } from './flowModel';
 import { useCloseGuard, useNavigationGuard } from './useCloseGuard';
 import type { NavigationGuard } from './useCloseGuard';
+import { FlowHistory } from './flowHistory';
 
 type Props = { quest: QuestDetail; onBack: () => void; navigationGuard: NavigationGuard };
 type InspectionWarning = { code: string; stepId: string | null; reason: string };
@@ -24,7 +25,7 @@ export function FlowEditor({ quest, onBack, navigationGuard }: Props) {
   const route = `/api/quests/${quest.summary.id}/flow`;
   const flow = useResource<FlowDocument>(route);
   if (flow.data) {
-    return <ReactFlowProvider><FlowWorkspace quest={quest} onBack={onBack}
+    return <ReactFlowProvider key={route}><FlowWorkspace quest={quest} onBack={onBack}
       navigationGuard={navigationGuard} initial={flow.data} route={route} /></ReactFlowProvider>;
   }
 
@@ -70,6 +71,45 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
   })), [edges, selectLink, saving, updateCurve]);
   const graph = useMemo(() => graphData(nodes, edges), [nodes, edges]);
   const signature = JSON.stringify(graph);
+  const [history] = useState(() => new FlowHistory(graph));
+  const historyGroup = useRef(0);
+  const [, refreshHistory] = useState(0);
+  useLayoutEffect(() => {
+    if (history.record(graph, historyGroup.current)) refreshHistory((revision) => revision + 1);
+  }, [graph, history]);
+
+  function travelHistory(direction: 'undo' | 'redo') {
+    if (pending.current) return;
+    history.record(graph, historyGroup.current);
+    historyGroup.current++;
+    const restored = history[direction]();
+    if (!restored) return;
+    const selectedNodes = new Set(nodes.filter((node) => node.selected).map((node) => node.id));
+    const selectedEdges = new Set(edges.filter((edge) => edge.selected).map((edge) => edge.id));
+    setNodes(restored.steps.map((step) => ({ ...asNode(step), selected: selectedNodes.has(step.id) })));
+    setEdges(restored.links.map((link) => ({ ...asEdge(link), selected: selectedEdges.has(link.id) })));
+    setError('');
+    refreshHistory((revision) => revision + 1);
+  }
+
+  function historyKeyDown(event: globalThis.KeyboardEvent) {
+    const target = event.target;
+    if (event.defaultPrevented || event.isComposing || document.querySelector('dialog[open]') || (target instanceof Element &&
+        target.closest('input, textarea, select, [contenteditable], dialog'))) return;
+    const key = event.key.toLowerCase();
+    if (event.ctrlKey && !event.altKey && (key === 'z' || key === 'y')) {
+      event.preventDefault();
+      event.stopPropagation();
+      travelHistory(key === 'y' || event.shiftKey ? 'redo' : 'undo');
+    } else if (!event.repeat) {
+      historyGroup.current++;
+    }
+  }
+
+  useEffect(() => {
+    window.addEventListener('keydown', historyKeyDown, true);
+    return () => window.removeEventListener('keydown', historyKeyDown, true);
+  });
   const inspectionSignature = JSON.stringify({
     steps: graph.steps.map(({ id, kind, title, description }) => ({ id, kind, title, description })),
     links: graph.links.map(({ id, from, to, condition }) => ({ id, from, to, condition })),
@@ -78,7 +118,7 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
   const inspectionStatus = !inspection ? '검사 전'
     : needsInspection ? '재검사 필요'
     : inspection.warnings.length ? '경고 있음' : '경고 없음';
-  const dirty = !!appliedDraft || signature !== savedGraph;
+  const dirty = signature !== savedGraph;
   useCloseGuard(dirty || saving);
   const canLeave = useNavigationGuard(navigationGuard, pending,
     dirty ? '저장하지 않은 플로우 변경이 있습니다. 편집 화면을 나갈까요?' : undefined);
@@ -224,10 +264,21 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
   const titleFor = (id: string) => nodes.find((node) => node.id === id)?.data.title.trim() || '제목 없는 단계';
 
   return (
-    <section className="panel flow-panel" aria-labelledby="flow-heading">
+    <section className="panel flow-panel" aria-labelledby="flow-heading"
+      onPointerDownCapture={() => { historyGroup.current++; }}
+      onFocusCapture={(event) => {
+        if (event.target.matches('input, textarea, [contenteditable]')) historyGroup.current++;
+      }}
+      onBlurCapture={(event) => {
+        if (event.target.matches('input, textarea, [contenteditable]')) historyGroup.current++;
+      }}>
       <div className="section-heading flow-heading">
         <div><h2 id="flow-heading">플로우 편집</h2><p className="hint">{questTitle(quest.summary.title)}</p></div>
         <div className="flow-heading-actions">
+          <button type="button" disabled={saving || !history.canUndo}
+            title="실행 취소 (Ctrl+Z)" onClick={() => travelHistory('undo')}>실행 취소</button>
+          <button type="button" disabled={saving || !history.canRedo}
+            title="다시 실행 (Ctrl+Y)" onClick={() => travelHistory('redo')}>다시 실행</button>
           <button type="button" disabled={saving} onClick={back}>상세로 돌아가기</button>
           <button type="button" className="primary" disabled={saving} onClick={() => void save()}>플로우 저장</button>
           <button type="button" disabled={checking} onClick={() => void inspect()}>검사</button>
