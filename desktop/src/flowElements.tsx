@@ -1,10 +1,11 @@
 import { useLayoutEffect, useRef } from 'react';
-import { BaseEdge, EdgeLabelRenderer, Handle, MarkerType, Panel, useReactFlow, useUpdateNodeInternals } from '@xyflow/react';
+import { BaseEdge, EdgeLabelRenderer, Handle, MarkerType, NodeResizeControl, Panel, useReactFlow, useUpdateNodeInternals } from '@xyflow/react';
 import type { Position } from '@xyflow/react';
 import type { Edge, EdgeProps, Node, NodeProps, Rect, XYPosition } from '@xyflow/react';
 import { stepLabels } from './flowModel';
 import type { CurveOffsets, Direction, FlowDocument, Link, Step } from './flowModel';
 import { handleSize, linkCurve, midpointControlWeight, normals, portAnchor } from './flowGeometry';
+import { minStepWidth, stepLayout } from './stepLayout';
 
 type StepData = Pick<Step, 'kind' | 'title' | 'description'> & { direction: Direction };
 export type StepNode = Node<StepData, 'questStep'>;
@@ -16,26 +17,22 @@ export type LinkEdge = Edge<{
   select?: (id: string) => void;
   changeCurve?: CurveChange;
 }, 'questLink'>;
-export const stepWidth = 156;
-export const stepHeight = 54;
-function ports(direction: Direction) {
+function ports(direction: Direction, width: number, height: number) {
   return (['source', 'target'] as const).map((type) => {
-    const anchor = portAnchor({ x: 0, y: 0, width: stepWidth, height: stepHeight }, direction, type);
+    const anchor = portAnchor({ x: 0, y: 0, width, height }, direction, type);
     return { id: type, type, position: anchor.side as Position, anchor };
   });
 }
 
-function nodeHandles(direction: Direction) {
-  return ports(direction).map(({ id, type, position, anchor }) => ({
+function nodeHandles(direction: Direction, width: number, height: number) {
+  return ports(direction, width, height).map(({ id, type, position, anchor }) => ({
     id, type, position, x: anchor.x - handleSize / 2, y: anchor.y - handleSize / 2,
     width: handleSize, height: handleSize,
   }));
 }
 
-export function asNode({ id, x, y, kind, title, description, direction = 'HORIZONTAL' }: Step): StepNode {
-  const width = stepWidth;
-  const height = stepHeight;
-  // Fixed cards and handle positions let edges render on the first frame.
+export function asNode({ id, x, y, kind, title, description, direction = 'HORIZONTAL', ...size }: Step): StepNode {
+  const { width, height } = stepLayout({ title, ...size });
   return {
     id,
     type: 'questStep',
@@ -44,13 +41,20 @@ export function asNode({ id, x, y, kind, title, description, direction = 'HORIZO
     initialWidth: width,
     initialHeight: height,
     style: { width, height },
-    handles: nodeHandles(direction),
+    width, height,
+    handles: nodeHandles(direction, width, height),
   };
 }
 
 export function updateNodeData(node: StepNode, update: Partial<StepData>): StepNode {
   const data = { ...node.data, ...update };
-  return { ...node, data, handles: data.direction === node.data.direction ? node.handles : nodeHandles(data.direction) };
+  return sizeNode({ ...node, data });
+}
+
+export function sizeNode(node: StepNode): StepNode {
+  const { width, height } = stepLayout({ title: node.data.title, width: node.width, height: node.height });
+  return { ...node, width, height, measured: { width, height }, style: { ...node.style, width, height },
+    handles: nodeHandles(node.data.direction, width, height) };
 }
 
 export function asEdge({ id, from, to, condition, curve }: Link): LinkEdge {
@@ -70,7 +74,7 @@ export function asEdge({ id, from, to, condition, curve }: Link): LinkEdge {
 
 export function graphData(nodes: StepNode[], edges: LinkEdge[]): Pick<FlowDocument, 'steps' | 'links'> {
   return {
-    steps: nodes.map(({ id, position, data }) => ({ id, ...data, x: position.x, y: position.y })),
+    steps: nodes.map(({ id, position, data, width, height }) => ({ id, ...data, width, height, x: position.x, y: position.y })),
     links: edges.map(({ id, source, target, data }) => ({
       id, from: source, to: target, condition: data?.condition ?? '', curve: data?.curve,
     })),
@@ -97,8 +101,8 @@ export const flowFitOptions = { padding: 0.24, maxZoom: 1.3, includeHiddenNodes:
 
 export function manualCurveBounds(nodes: StepNode[], edges: LinkEdge[]): Rect | undefined {
   if (!edges.some((edge) => edge.data?.curve)) return;
-  const cards = new Map(nodes.map(({ id, position, data }) =>
-    [id, { ...position, width: stepWidth, height: stepHeight, direction: data.direction }]));
+  const cards = new Map(nodes.map(({ id, position, data, width, height }) =>
+    [id, { ...position, ...stepLayout({ title: data.title, width, height }), direction: data.direction }]));
   let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
   function include(x: number, y: number) {
     left = Math.min(left, x);
@@ -136,21 +140,31 @@ export function FlowControls({ empty = false, bounds }: { empty?: boolean; bound
   );
 }
 
-function StepBox({ id, data, isConnectable }: NodeProps<StepNode>) {
+const resizePositions = ['top-left', 'top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left'] as const;
+
+function StepBox({ id, data, isConnectable, selected, width, height }: NodeProps<StepNode>) {
+  const layout = stepLayout({ title: data.title, width, height });
   const refreshHandles = useUpdateNodeInternals();
   useLayoutEffect(() => {
     refreshHandles(id);
-  }, [id, data.direction, refreshHandles]);
+  }, [id, data.direction, layout.width, layout.height, refreshHandles]);
   return (
     <div className={`flow-step flow-step-${data.kind.toLowerCase()}`}>
-      {ports(data.direction).map(({ id, type, position, anchor }) => (
+      {selected && isConnectable && resizePositions.map((position) => (
+        <NodeResizeControl key={position} position={position} className="step-resize nodrag nopan"
+          minWidth={minStepWidth} minHeight={layout.minHeight} keepAspectRatio={false}
+          style={{ marginLeft: position === 'left' ? -17 : position === 'right' ? 17 : 0,
+            marginTop: position === 'top' ? -17 : position === 'bottom' ? 17 : 0 }} />
+      ))}
+      {ports(data.direction, layout.width, layout.height).map(({ id, type, position, anchor }) => (
         <Handle key={id} id={id} type={type} position={position} isConnectable={isConnectable}
           isConnectableStart={type === 'source'}
           title={type === 'source' ? '출력 연결점' : '입력 연결점'}
           style={{ left: anchor.x, top: anchor.y, right: 'auto', bottom: 'auto', transform: 'translate(-50%, -50%)' }} />
       ))}
       <div className="flow-step-kind">{stepLabels[data.kind]}</div>
-      <div className="flow-step-title" title={data.title}>{data.title.trim() || '제목 없는 단계'}</div>
+      <div className="flow-step-title" title={data.title}>{layout.lines.map((line, index) =>
+        <div key={index}>{line || '\u00a0'}</div>)}</div>
     </div>
   );
 }

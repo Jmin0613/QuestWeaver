@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import {
-  Background, ReactFlow, ReactFlowProvider, useEdgesState, useNodesState, useReactFlow,
+  applyNodeChanges, Background, ReactFlow, ReactFlowProvider, useEdgesState, useNodesState, useReactFlow,
 } from '@xyflow/react';
 import type { Connection } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import './flow.css';
 import { errorMessage, questTitle, request, useResource } from './api';
 import type { QuestDetail } from './api';
-import { asEdge, asNode, FlowControls, flowEdgeTypes, flowFitOptions, flowNodeTypes, graphData, manualCurveBounds, updateNodeData, withLanes } from './flowElements';
+import { asEdge, asNode, FlowControls, flowEdgeTypes, flowFitOptions, flowNodeTypes, graphData, manualCurveBounds, sizeNode, updateNodeData, withLanes } from './flowElements';
 import { AiFlowGenerator } from './AiFlowGenerator';
 import type { LinkEdge, StepNode } from './flowElements';
 import { directionLabels, stepLabels } from './flowModel';
@@ -43,7 +43,7 @@ export function FlowEditor({ quest, onBack, navigationGuard }: Props) {
 function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props & { initial: FlowDocument; route: string }) {
   const canvas = useRef<HTMLDivElement>(null);
   const view = useReactFlow<StepNode, LinkEdge>();
-  const [nodes, setNodes, onNodesChange] = useNodesState(initial.steps.map(asNode));
+  const [nodes, setNodes] = useNodesState(initial.steps.map(asNode));
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.links.map(asEdge));
   const [savedGraph, setSavedGraph] = useState(() => JSON.stringify(graphData(nodes, edges)));
   const [saving, setSaving] = useState(false);
@@ -260,7 +260,7 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
           <ReactFlow
             nodes={nodes}
             edges={renderedEdges}
-            onNodesChange={onNodesChange}
+            onNodesChange={(changes) => setNodes((current) => applyNodeChanges(changes, current).map(sizeNode))}
             onEdgesChange={onEdgesChange}
             onConnect={connect}
             onReconnect={reconnect}
@@ -299,7 +299,7 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
               </select>
               <p className="hint">연결 방향을 바꾸면 이 단계에 붙은 수동 곡선이 초기화됩니다.</p>
               <label htmlFor="flow-step-title">단계 제목</label>
-              <input id="flow-step-title" maxLength={200} value={step.data.title} onChange={(event) => updateStep({ title: event.target.value })} />
+              <textarea id="flow-step-title" rows={3} maxLength={200} value={step.data.title} onChange={(event) => updateStep({ title: event.target.value })} />
               <label htmlFor="flow-step-description">단계 설명</label>
               <textarea id="flow-step-description" rows={5} value={step.data.description}
                 onChange={(event) => updateStep({ description: event.target.value })} />

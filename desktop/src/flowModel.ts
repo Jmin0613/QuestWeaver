@@ -17,6 +17,8 @@ export type Step = {
   x: number;
   y: number;
   direction?: Direction;
+  width?: number;
+  height?: number;
 };
 
 export type Link = {

@@ -68,8 +68,9 @@ main.flow-main {
 .flow-step-branch { --flow-accent: #95601b; --flow-tint: #fff5e6; }
 .flow-step-end { --flow-accent: #985070; --flow-tint: #fff0f5; }
 .react-flow__node.selected .flow-step { outline: 2px solid #344c94; outline-offset: 3px; }
-.flow-step-kind { color: var(--flow-accent); font-size: 0.72rem; font-weight: 750; }
-.flow-step-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9rem; font-weight: 650; }
+.flow-step-kind { color: var(--flow-accent); font: 700 12px/15px "Malgun Gothic", "Segoe UI", sans-serif; }
+.flow-step-title { white-space: pre; font: 600 14px/20px "Malgun Gothic", "Segoe UI", sans-serif; }
+.flow-step .step-resize { width: 9px; height: 9px; background: white; border: 1px solid #344c94; z-index: 5; }
 
 .flow-step .react-flow__handle {
   box-sizing: border-box;

@@ -1,4 +1,5 @@
-import { asEdge, stepHeight, stepWidth, withLanes } from './flowElements';
+import { asEdge, withLanes } from './flowElements';
+import { stepFontFamily, stepLayout, titleLineHeight } from './stepLayout';
 import { linkCurve, portAnchor } from './flowGeometry';
 import { stepLabels } from './flowModel';
 import type { FlowDocument, StepKind } from './flowModel';
@@ -6,7 +7,7 @@ import type { FlowDocument, StepKind } from './flowModel';
 const maxSide = 8192;
 const maxPixels = 24_000_000;
 const margin = 34;
-const fontFamily = '"Malgun Gothic", "Segoe UI", sans-serif';
+const fontFamily = stepFontFamily;
 const tooLarge = '차트가 PNG 크기 제한(한 변 8,192px, 총 2,400만 픽셀)을 넘습니다. 단계 간격을 줄여 주세요.';
 const colors: Record<StepKind, [string, string]> = {
   START: ['#2b775d', '#edf8f3'],
@@ -49,15 +50,10 @@ export async function renderFlowPng(flow: FlowDocument, game: string, quest: str
   ctx.font = `600 14px ${fontFamily}`;
   const anchor = flow.steps[0];
   const cards = new Map(flow.steps.map((step) => {
-    const lines = wrap(ctx, step.title.trim() || '제목 없는 단계', stepWidth - 23);
     const x = step.x - anchor.x, y = step.y - anchor.y;
     if (!(Math.abs(x) < maxSide && Math.abs(y) < maxSide)) throw new Error(tooLarge);
-    return [step.id, { ...step, x, y, width: stepWidth, height: Math.max(stepHeight, 33 + lines.length * 18), lines }];
+    return [step.id, { ...step, ...stepLayout(step), x, y }];
   }));
-  let tallest = stepHeight;
-  for (const card of cards.values()) tallest = Math.max(tallest, card.height);
-  // Keep vertical spacing proportional when wrapped titles make the cards taller.
-  for (const card of cards.values()) card.y *= tallest / stepHeight;
 
   const occupied: Box[] = [...cards.values()];
   const bounds = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
@@ -165,8 +161,8 @@ export async function renderFlowPng(flow: FlowDocument, game: string, quest: str
   for (const card of cards.values()) {
     const [accent, fill] = colors[card.kind];
     box(card, accent, fill);
-    text([stepLabels[card.kind]], card.x + 11, card.y + 7, 15, 12, 700, accent);
-    text(card.lines, card.x + 11, card.y + 23, 18, 14, 600, '#1d273c');
+    text([stepLabels[card.kind]], card.x + 15, card.y + 9, 15, 12, 700, accent);
+    text(card.lines, card.x + 15, card.y + 24, titleLineHeight, 14, 600, '#1d273c');
   }
   for (const { label } of lines) {
     if (!label) continue;

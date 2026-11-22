@@ -22,13 +22,15 @@ record FlowDocument(
     enum Direction { HORIZONTAL, VERTICAL }
 
     record Step(@NotNull UUID id, @NotNull Kind kind, @NotNull @Size(max = 200) String title,
-                @NotNull String description, @NotNull Double x, @NotNull Double y, Direction direction) {
+                @NotNull String description, @NotNull Double x, @NotNull Double y, Direction direction,
+                @JsonInclude(JsonInclude.Include.NON_NULL) Double width,
+                @JsonInclude(JsonInclude.Include.NON_NULL) Double height) {
         Step {
             direction = direction == null ? Direction.HORIZONTAL : direction;
         }
 
         Step(UUID id, Kind kind, String title, String description, Double x, Double y) {
-            this(id, kind, title, description, x, y, Direction.HORIZONTAL);
+            this(id, kind, title, description, x, y, Direction.HORIZONTAL, null, null);
         }
     }
 
@@ -62,6 +64,10 @@ record FlowDocument(
             }
             if (!Double.isFinite(step.x()) || !Double.isFinite(step.y())) {
                 throw badRequest("단계 좌표를 확인하세요.");
+            }
+            if ((step.width() != null && (!Double.isFinite(step.width()) || step.width() < 80))
+                    || (step.height() != null && (!Double.isFinite(step.height()) || step.height() < 54))) {
+                throw badRequest("단계 크기를 확인하세요. 최소 너비는 80, 높이는 54입니다.");
             }
         }
 

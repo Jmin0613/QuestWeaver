@@ -179,6 +179,24 @@ class QuestFlowTests {
         assertThat(read(flow).at("/links/0/curve").isMissingNode()).isTrue();
     }
 
+    @Test
+    void persistsSizesAndRejectsInvalidDimensionsWithoutChangingTheFlow() throws Exception {
+        String flow = newDraft("단계 크기") + "/flow";
+        FlowDocument original = example();
+        JsonNode sized = json.valueToTree(original);
+        ((ObjectNode) sized.at("/steps/0")).put("width", 97.5).put("height", 412.25);
+        send("PUT", flow, sized, 200);
+        assertThat(read(flow)).isEqualTo(sized);
+        assertThat(send("POST", "/api/flow/inspect", sized, 200))
+                .isEqualTo(send("POST", "/api/flow/inspect", original, 200));
+        for (double width : new double[]{-1, 0, 79}) {
+            JsonNode invalid = sized.deepCopy();
+            ((ObjectNode) invalid.at("/steps/0")).put("width", width);
+            send("PUT", flow, invalid, 400);
+            assertThat(read(flow)).isEqualTo(sized);
+        }
+    }
+
     private String newDraft(String title) throws Exception {
         String quest = "/api/quests/" + UUID.randomUUID();
         send("PUT", quest, Map.of("title", title, "body", "첫 줄\n둘째 줄", "author", "기획자",
