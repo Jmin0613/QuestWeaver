@@ -8,11 +8,11 @@ import '@xyflow/react/dist/style.css';
 import './flow.css';
 import { errorMessage, questTitle, request, useResource } from './api';
 import type { QuestDetail } from './api';
-import { asEdge, asNode, FlowControls, flowEdgeTypes, flowFitOptions, flowNodeTypes, graphData, manualCurveBounds, sizeNode, updateNodeData, withLanes } from './flowElements';
+import { asEdge, asNode, FlowControls, flowEdgeTypes, flowFitOptions, flowNodeTypes, graphData, flowBounds, sizeNode, updateNodeData, withLanes } from './flowElements';
 import { AiFlowGenerator } from './AiFlowGenerator';
 import type { LinkEdge, StepNode } from './flowElements';
-import { directionLabels, stepLabels } from './flowModel';
-import type { CurveOffsets, Direction, FlowDocument, StepKind } from './flowModel';
+import { directionLabels, linkKindLabels, stepLabels } from './flowModel';
+import type { CurveOffsets, Direction, FlowDocument, LinkKind, OrthogonalRoute, StepKind } from './flowModel';
 import { useCloseGuard, useNavigationGuard } from './useCloseGuard';
 import type { NavigationGuard } from './useCloseGuard';
 import { FlowHistory } from './flowHistory';
@@ -66,9 +66,15 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
     setEdges((current) => current.map((edge) => edge.id === id
       ? { ...edge, data: { condition: '', ...edge.data, curve } } : edge));
   }, [setEdges]);
-  const renderedEdges = useMemo(() => withLanes(edges, selectLink, saving ? undefined : updateCurve).map((edge) => ({
-    ...edge, reconnectable: !saving && !!edge.selected,
-  })), [edges, selectLink, saving, updateCurve]);
+  const updateRoute = useCallback((id: string, route?: OrthogonalRoute) => {
+    if (pending.current) return;
+    setEdges((current) => current.map((edge) => edge.id === id
+      ? { ...edge, data: { condition: '', ...edge.data, route } } : edge));
+  }, [setEdges]);
+  const renderedEdges = useMemo(() => withLanes(edges, selectLink, saving ? undefined : updateCurve,
+    saving ? undefined : updateRoute).map((edge) => ({
+    ...edge, zIndex: edge.selected ? 1 : 0, reconnectable: !saving && !!edge.selected,
+  })), [edges, selectLink, saving, updateCurve, updateRoute]);
   const graph = useMemo(() => graphData(nodes, edges), [nodes, edges]);
   const signature = JSON.stringify(graph);
   const [history] = useState(() => new FlowHistory(graph));
@@ -167,7 +173,7 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
 
   function connect({ source, target }: Connection) {
     if (pending.current) return;
-    const edge = asEdge({ id: crypto.randomUUID(), from: source, to: target, condition: '' });
+    const edge = asEdge({ id: crypto.randomUUID(), from: source, to: target, condition: '', kind: 'ORTHOGONAL' });
     // Parallel links have independent IDs and conditions.
     setEdges((current) => [...current, edge]);
     // A handle click also bubbles to its node. Select the new link after that event.
@@ -183,8 +189,8 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
     if (!step || pending.current) return;
     setNodes((current) => current.map((node) => node.id === step.id ? updateNodeData(node, update) : node));
     if (update.direction && update.direction !== step.data.direction) {
-      setEdges((current) => current.map((edge) => edge.data?.curve && (edge.source === step.id || edge.target === step.id)
-        ? { ...edge, data: { ...edge.data, curve: undefined } } : edge));
+      setEdges((current) => current.map((edge) => (edge.source === step.id || edge.target === step.id)
+        ? { ...edge, data: { condition: '', ...edge.data, curve: undefined, route: undefined } } : edge));
     }
   }
 
@@ -288,6 +294,10 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
         {kinds.map((kind) => <button key={kind} type="button" disabled={saving} onClick={() => addStep(kind)}>
           {stepLabels[kind]} 단계 추가
         </button>)}
+        <button type="button" disabled={saving || !edges.some((edge) => edge.data?.kind !== 'ORTHOGONAL')}
+          onClick={() => setEdges((current) => current.map((edge) => ({
+            ...edge, data: { condition: '', ...edge.data, kind: 'ORTHOGONAL' },
+          })))}>모든 연결선 직선·꺾은선으로</button>
         <span className="flow-unsaved" style={{ visibility: dirty ? 'visible' : 'hidden' }}>저장하지 않은 변경</span>
       </div>
       <AiFlowGenerator route={route} ready={!saving} hasSource={!!quest.body?.trim()} onApply={applyDraft} />
@@ -330,7 +340,7 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
           >
             <Background gap={22} color="#cad4e5" />
             {nodes.length === 0 && <div className="flow-empty">아직 단계가 없습니다. 위 버튼으로 단계를 추가하세요.</div>}
-            <FlowControls empty={!nodes.length} bounds={manualCurveBounds(nodes, renderedEdges)} />
+            <FlowControls empty={!nodes.length} bounds={flowBounds(nodes, renderedEdges)} />
           </ReactFlow>
         </div>
         <aside className="flow-sidebar">
@@ -348,7 +358,7 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
                 {Object.entries(directionLabels).map(([direction, label]) =>
                   <option key={direction} value={direction}>{label}</option>)}
               </select>
-              <p className="hint">연결 방향을 바꾸면 이 단계에 붙은 수동 곡선이 초기화됩니다.</p>
+              <p className="hint">연결 방향을 바꾸면 이 단계에 붙은 수동 곡선과 직각 경로가 초기화됩니다.</p>
               <label htmlFor="flow-step-title">단계 제목</label>
               <textarea id="flow-step-title" rows={3} maxLength={200} value={step.data.title} onChange={(event) => updateStep({ title: event.target.value })} />
               <label htmlFor="flow-step-description">단계 설명</label>
@@ -359,10 +369,21 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
             {!step && link && <fieldset disabled={saving}>
               <p className="flow-endpoints">{titleFor(link.source)} → {titleFor(link.target)}</p>
               <p className="hint">선의 끝점을 끌면 연결할 단계를 바꿀 수 있습니다.</p>
+              <label htmlFor="flow-link-kind">연결선 종류</label>
+              <select id="flow-link-kind" value={link.data?.kind ?? 'CURVE'} onChange={(event) => {
+                const kind = event.target.value as LinkKind;
+                setEdges((current) => current.map((edge) => edge.id === link.id
+                  ? { ...edge, data: { condition: '', ...edge.data, kind } } : edge));
+              }}>
+                {Object.entries(linkKindLabels).map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}
+              </select>
+              {link.data?.kind === 'ORTHOGONAL' && <p className="hint">노란 점을 끌면 꺾은선을 조절합니다. 수평 구간은 위아래로, 수직 구간은 좌우로 움직입니다.</p>}
               <label htmlFor="flow-link-condition">조건 또는 선택지</label>
               <textarea id="flow-link-condition" rows={3} value={link.data?.condition ?? ''}
                 onChange={(event) => updateCondition(event.target.value)} />
-              <button type="button" disabled={!link.data?.curve} onClick={() => updateCurve(link.id)}>곡선 초기화</button>
+              {link.data?.kind === 'ORTHOGONAL'
+                ? <button type="button" disabled={!link.data.route} onClick={() => updateRoute(link.id)}>경로 초기화</button>
+                : <button type="button" disabled={!link.data?.curve} onClick={() => updateCurve(link.id)}>곡선 초기화</button>}
               <button type="button" className="danger" onClick={removeSelection}>연결선 삭제</button>
             </fieldset>}
           </section>

@@ -20,6 +20,7 @@ record FlowDocument(
 
     enum Kind { START, PROGRESS, BRANCH, END }
     enum Direction { HORIZONTAL, VERTICAL }
+    enum LinkKind { ORTHOGONAL, CURVE }
 
     record Step(@NotNull UUID id, @NotNull Kind kind, @NotNull @Size(max = 200) String title,
                 @NotNull String description, @NotNull Double x, @NotNull Double y, Direction direction,
@@ -36,11 +37,15 @@ record FlowDocument(
 
     @JsonIgnoreProperties({"fromSide", "toSide"})
     record Link(@NotNull UUID id, @NotNull UUID from, @NotNull UUID to, @NotNull String condition,
-                @Valid @JsonInclude(JsonInclude.Include.NON_NULL) Curve curve) {
+                @Valid @JsonInclude(JsonInclude.Include.NON_NULL) Curve curve,
+                @JsonInclude(JsonInclude.Include.NON_NULL) LinkKind kind,
+                @Valid @JsonInclude(JsonInclude.Include.NON_NULL) Route route) {
         Link(UUID id, UUID from, UUID to, String condition) {
-            this(id, from, to, condition, null);
+            this(id, from, to, condition, null, null, null);
         }
     }
+
+    record Route(@NotNull Double start, @NotNull Double end, @NotNull Double offset) {}
 
     record Curve(@NotNull @Valid Offset start, @NotNull @Valid Offset end) {}
 
@@ -81,6 +86,11 @@ record FlowDocument(
             }
             if (link.curve() != null && (!link.curve().start().finite() || !link.curve().end().finite())) {
                 throw badRequest("연결선의 곡선 제어점 좌표를 확인하세요.");
+            }
+            if (link.route() != null && (!Double.isFinite(link.route().start()) || link.route().start() < 24
+                    || !Double.isFinite(link.route().end()) || link.route().end() < 24
+                    || !Double.isFinite(link.route().offset()))) {
+                throw badRequest("직각 연결선의 경로를 확인하세요.");
             }
         }
 

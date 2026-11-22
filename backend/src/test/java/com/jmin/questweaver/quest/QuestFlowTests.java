@@ -197,6 +197,33 @@ class QuestFlowTests {
         }
     }
 
+    @Test
+    void preservesLegacyCurvesAndPersistsOrthogonalKindAndRelativeRoute() throws Exception {
+        String flow = newDraft("직각 연결선") + "/flow";
+        FlowDocument original = example();
+        JsonNode document = json.valueToTree(original);
+        ObjectNode link = (ObjectNode) document.at("/links/0");
+        link.set("curve", json.valueToTree(new FlowDocument.Curve(
+                new FlowDocument.Offset(110.0, -250.0), new FlowDocument.Offset(-90.0, 120.0))));
+        send("PUT", flow, document, 200);
+        assertThat(read(flow)).isEqualTo(document);
+        link.put("kind", "ORTHOGONAL");
+        link.set("route", json.valueToTree(new FlowDocument.Route(45.0, 60.0, 420.0)));
+        send("PUT", flow, document, 200);
+        assertThat(read(flow)).isEqualTo(document);
+        assertThat(send("POST", "/api/flow/inspect", document, 200))
+                .isEqualTo(send("POST", "/api/flow/inspect", original, 200));
+        JsonNode invalid = document.deepCopy();
+        ((ObjectNode) invalid.at("/links/0/route")).put("start", 23);
+        send("PUT", flow, invalid, 400);
+        assertThat(read(flow)).isEqualTo(document);
+        ((ObjectNode) invalid.at("/links/0")).put("kind", "UNKNOWN");
+        send("PUT", flow, invalid, 400);
+        link.put("kind", "CURVE");
+        send("PUT", flow, document, 200);
+        assertThat(read(flow)).isEqualTo(document);
+    }
+
     private String newDraft(String title) throws Exception {
         String quest = "/api/quests/" + UUID.randomUUID();
         send("PUT", quest, Map.of("title", title, "body", "첫 줄\n둘째 줄", "author", "기획자",

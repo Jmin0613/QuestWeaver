@@ -9,6 +9,9 @@ export type StepKind = keyof typeof stepLabels;
 export const directionLabels = { HORIZONTAL: '좌우형', VERTICAL: '상하형' };
 export type Direction = keyof typeof directionLabels;
 export type CurveOffsets = { start: { x: number; y: number }; end: { x: number; y: number } };
+export const linkKindLabels = { ORTHOGONAL: '직선·꺾은선', CURVE: '곡선형' };
+export type LinkKind = keyof typeof linkKindLabels;
+export type OrthogonalRoute = { start: number; end: number; offset: number };
 export type Step = {
   id: string;
   kind: StepKind;
@@ -27,6 +30,8 @@ export type Link = {
   to: string;
   condition: string;
   curve?: CurveOffsets;
+  kind?: LinkKind;
+  route?: OrthogonalRoute;
 };
 
 export type FlowDocument = {

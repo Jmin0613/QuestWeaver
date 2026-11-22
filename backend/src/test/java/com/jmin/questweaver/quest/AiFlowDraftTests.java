@@ -67,6 +67,7 @@ class AiFlowDraftTests {
         assertThat(draft.at("/needsReview/0").asString()).contains("판정 기준");
         assertThat(graph.path("steps").size()).isEqualTo(5);
         assertThat(graph.path("links").size()).isEqualTo(5);
+        assertThat(graph.at("/links/0/kind").asString()).isEqualTo("ORTHOGONAL");
         assertThat(graph.at("/links/4/to")).isEqualTo(graph.at("/steps/1/id"));
         assertThat(graph.at("/links/3/condition").asString()).isEqualTo("포기하면");
         assertThat(graph.at("/steps/3/x")).isEqualTo(graph.at("/steps/4/x"));

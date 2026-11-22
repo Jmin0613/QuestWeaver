@@ -1,6 +1,6 @@
 import { asEdge, withLanes } from './flowElements';
 import { stepFontFamily, stepLayout, titleLineHeight } from './stepLayout';
-import { linkCurve, portAnchor } from './flowGeometry';
+import { linkGeometry, portAnchor } from './flowGeometry';
 import { stepLabels } from './flowModel';
 import type { FlowDocument, StepKind } from './flowModel';
 
@@ -75,15 +75,15 @@ export async function renderFlowPng(flow: FlowDocument, game: string, quest: str
     if (!from || !to) throw new Error('연결된 단계를 찾을 수 없어 PNG를 만들 수 없습니다.');
     const start = portAnchor(from, from.direction, 'source');
     const end = portAnchor(to, to.direction, 'target');
-    const curve = linkCurve(start, end, edge.data?.lane ?? 0, edge.data?.curve);
-    for (const point of Object.values(curve)) include(point.x, point.y);
+    const geometry = linkGeometry(start, end, edge.data ?? {}, from, to);
+    for (const point of geometry.points) include(point.x, point.y);
     const condition = edge.data?.condition.trim();
     let label;
     if (condition) {
       const text = wrap(ctx, condition, 230);
       const width = Math.max(...text.map((row) => ctx.measureText(row).width)) + 16;
       const height = text.length * 17 + 10;
-      const box = { x: curve.midpoint.x - width / 2, y: curve.midpoint.y - height - 5, width, height };
+      const box = { x: geometry.midpoint.x - width / 2, y: geometry.midpoint.y - height - 5, width, height };
       let collision = occupied.find((other) => intersects(box, other));
       while (collision) {
         box.y = collision.y - height - 6;
@@ -94,7 +94,7 @@ export async function renderFlowPng(flow: FlowDocument, game: string, quest: str
       include(box.x + width, box.y + height);
       label = { ...box, text };
     }
-    return { start, end, ...curve, label };
+    return { start, end, ...geometry, label };
   });
 
   ctx.font = `700 23px ${fontFamily}`;
@@ -124,13 +124,12 @@ export async function renderFlowPng(flow: FlowDocument, game: string, quest: str
   text(['React Flow · xyflow.com'], margin, height - 26, 15, 12, 500, '#475674');
   ctx.translate(margin - bounds.left, margin + header - bounds.top);
 
-  for (const { start, end, startControl, midpoint, endControl, label } of lines) {
+  for (const { end, path, midpoint, endControl, label } of lines) {
     ctx.strokeStyle = '#53658c';
     ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.bezierCurveTo(startControl.x, startControl.y, endControl.x, endControl.y, end.x, end.y);
-    ctx.stroke();
+    ctx.lineJoin = 'miter';
+    ctx.lineCap = 'butt';
+    ctx.stroke(new Path2D(path));
     const angle = Math.atan2(end.y - endControl.y, end.x - endControl.x);
     ctx.fillStyle = '#53658c';
     ctx.beginPath();

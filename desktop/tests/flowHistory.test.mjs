@@ -78,3 +78,17 @@ test('AI replacement can be undone and sessions have independent histories', () 
   assert.equal(nextSession.canUndo, false);
   assert.equal(nextSession.canRedo, false);
 });
+
+test('bulk edge kind conversion restores legacy curves and manual routes in one undo', () => {
+  const original = edit(initial, (graph) => {
+    graph.links[0].curve = { start: { x: 120, y: -190 }, end: { x: -80, y: 20 } };
+    graph.links.push({ id: 'retry', from: 'end', to: 'start', condition: '재도전',
+      kind: 'ORTHOGONAL', route: { start: 40, end: 40, offset: 300 } });
+  });
+  const history = new FlowHistory(original);
+  const bulk = edit(original, (graph) => { graph.links.forEach((link) => { link.kind = 'ORTHOGONAL'; }); });
+  history.record(bulk, 1);
+  assert.deepEqual(history.undo(), original);
+  assert.equal(history.canUndo, false);
+  assert.deepEqual(history.redo(), bulk);
+});

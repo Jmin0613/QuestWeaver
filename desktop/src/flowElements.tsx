@@ -1,21 +1,22 @@
 import { useLayoutEffect, useRef } from 'react';
-import { BaseEdge, EdgeLabelRenderer, Handle, MarkerType, NodeResizeControl, Panel, useReactFlow, useUpdateNodeInternals } from '@xyflow/react';
+import type { PointerEvent } from 'react';
+import { BaseEdge, EdgeLabelRenderer, Handle, MarkerType, NodeResizeControl, Panel, useInternalNode, useReactFlow, useUpdateNodeInternals } from '@xyflow/react';
 import type { Position } from '@xyflow/react';
 import type { Edge, EdgeProps, Node, NodeProps, Rect, XYPosition } from '@xyflow/react';
 import { stepLabels } from './flowModel';
-import type { CurveOffsets, Direction, FlowDocument, Link, Step } from './flowModel';
-import { handleSize, linkCurve, midpointControlWeight, normals, portAnchor } from './flowGeometry';
+import type { CurveOffsets, Direction, FlowDocument, Link, OrthogonalRoute, Step } from './flowModel';
+import { handleSize, linkGeometry, midpointControlWeight, normals, portAnchor } from './flowGeometry';
 import { minStepWidth, stepLayout } from './stepLayout';
 
 type StepData = Pick<Step, 'kind' | 'title' | 'description'> & { direction: Direction };
 export type StepNode = Node<StepData, 'questStep'>;
 type CurveChange = (id: string, curve: CurveOffsets) => void;
-export type LinkEdge = Edge<{
-  condition: string;
-  curve?: CurveOffsets;
+type RouteChange = (id: string, route: OrthogonalRoute) => void;
+export type LinkEdge = Edge<Pick<Link, 'condition' | 'kind' | 'curve' | 'route'> & {
   lane?: number;
   select?: (id: string) => void;
   changeCurve?: CurveChange;
+  changeRoute?: RouteChange;
 }, 'questLink'>;
 function ports(direction: Direction, width: number, height: number) {
   return (['source', 'target'] as const).map((type) => {
@@ -57,7 +58,7 @@ export function sizeNode(node: StepNode): StepNode {
     handles: nodeHandles(node.data.direction, width, height) };
 }
 
-export function asEdge({ id, from, to, condition, curve }: Link): LinkEdge {
+export function asEdge({ id, from, to, condition, curve, kind, route }: Link): LinkEdge {
   return {
     id,
     type: 'questLink',
@@ -67,7 +68,7 @@ export function asEdge({ id, from, to, condition, curve }: Link): LinkEdge {
     targetHandle: 'target',
     markerEnd: { type: MarkerType.ArrowClosed, color: '#53658c' },
     interactionWidth: 20,
-    data: { condition, curve },
+    data: { condition, curve, kind, route },
     ariaLabel: condition || '퀘스트 연결선',
   };
 }
@@ -77,11 +78,12 @@ export function graphData(nodes: StepNode[], edges: LinkEdge[]): Pick<FlowDocume
     steps: nodes.map(({ id, position, data, width, height }) => ({ id, ...data, width, height, x: position.x, y: position.y })),
     links: edges.map(({ id, source, target, data }) => ({
       id, from: source, to: target, condition: data?.condition ?? '', curve: data?.curve,
+      kind: data?.kind, route: data?.route,
     })),
   };
 }
 
-export function withLanes(edges: LinkEdge[], select?: (id: string) => void, changeCurve?: CurveChange): LinkEdge[] {
+export function withLanes(edges: LinkEdge[], select?: (id: string) => void, changeCurve?: CurveChange, changeRoute?: RouteChange): LinkEdge[] {
   const counts = new Map<string, number>();
   const keyFor = (edge: LinkEdge) => `${edge.source}:${edge.sourceHandle}:${edge.target}:${edge.targetHandle}`;
   for (const edge of edges) {
@@ -93,14 +95,14 @@ export function withLanes(edges: LinkEdge[], select?: (id: string) => void, chan
     const key = keyFor(edge);
     const lane = nextLane.get(key) ?? -((counts.get(key) ?? 1) - 1) / 2;
     nextLane.set(key, lane + 1);
-    return { ...edge, data: { condition: '', ...edge.data, lane, select, changeCurve } };
+    return { ...edge, data: { condition: '', ...edge.data, lane, select, changeCurve, changeRoute } };
   });
 }
 
 export const flowFitOptions = { padding: 0.24, maxZoom: 1.3, includeHiddenNodes: true };
 
-export function manualCurveBounds(nodes: StepNode[], edges: LinkEdge[]): Rect | undefined {
-  if (!edges.some((edge) => edge.data?.curve)) return;
+export function flowBounds(nodes: StepNode[], edges: LinkEdge[]): Rect | undefined {
+  if (!nodes.length) return;
   const cards = new Map(nodes.map(({ id, position, data, width, height }) =>
     [id, { ...position, ...stepLayout({ title: data.title, width, height }), direction: data.direction }]));
   let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
@@ -117,11 +119,11 @@ export function manualCurveBounds(nodes: StepNode[], edges: LinkEdge[]): Rect | 
   for (const edge of edges) {
     const from = cards.get(edge.source), to = cards.get(edge.target);
     if (!from || !to) continue;
-    const curve = linkCurve(portAnchor(from, from.direction, 'source'), portAnchor(to, to.direction, 'target'),
-      edge.data?.lane ?? 0, edge.data?.curve);
-    for (const point of Object.values(curve)) include(point.x, point.y);
+    const curve = linkGeometry(portAnchor(from, from.direction, 'source'), portAnchor(to, to.direction, 'target'),
+      edge.data ?? {}, from, to);
+    for (const point of curve.points) include(point.x, point.y);
     if (edge.data?.condition.trim()) {
-      include(curve.midpoint.x - 70, curve.midpoint.y - 32);
+      include(curve.midpoint.x - 70, curve.midpoint.y - 48);
       include(curve.midpoint.x + 70, curve.midpoint.y);
     }
   }
@@ -175,54 +177,94 @@ function cardAnchor(x: number, y: number, side: Position) {
   return { side, x: x - outward.x * handleSize / 2, y: y - outward.y * handleSize / 2 };
 }
 
-function CurveHandle({ point, label, center = false, beginDrag }: {
-  point: XYPosition;
-  label: string;
-  center?: boolean;
-  beginDrag: () => (delta: XYPosition) => void;
-}) {
+function useFlowDrag(beginDrag: () => (delta: XYPosition) => void) {
   const { screenToFlowPosition } = useReactFlow();
-  const drag = useRef<{ id: number; origin: XYPosition; move: (delta: XYPosition) => void } | null>(null);
+  const drag = useRef<{ id: number; origin: XYPosition; screen: XYPosition; started: boolean;
+    move: (delta: XYPosition) => void } | null>(null);
+  return {
+    onPointerDown: (event: PointerEvent<Element>) => {
+      if (event.button !== 0 || drag.current) return;
+      event.stopPropagation();
+      event.preventDefault();
+      if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus({ preventScroll: true });
+      const origin = screenToFlowPosition({ x: event.clientX, y: event.clientY }, { snapToGrid: false });
+      drag.current = { id: event.pointerId, origin, screen: { x: event.clientX, y: event.clientY },
+        started: false, move: beginDrag() };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    onPointerMove: (event: PointerEvent<Element>) => {
+      const active = drag.current;
+      if (!active || event.pointerId !== active.id) return;
+      event.stopPropagation();
+      if (!active.started && Math.hypot(event.clientX - active.screen.x, event.clientY - active.screen.y) < 3) return;
+      active.started = true;
+      const pointer = screenToFlowPosition({ x: event.clientX, y: event.clientY }, { snapToGrid: false });
+      active.move({ x: pointer.x - active.origin.x, y: pointer.y - active.origin.y });
+    },
+    onLostPointerCapture: () => { drag.current = null; },
+  };
+}
+
+function CurveHandle({ point, label, center = false, axis, beginDrag }: {
+  point: XYPosition; label: string; center?: boolean; axis?: 'x' | 'y'; beginDrag: () => (delta: XYPosition) => void;
+}) {
+  const drag = useFlowDrag(beginDrag);
   return (
     <button type="button" className={`curve-handle nodrag nopan${center ? ' curve-handle-center' : ''}`} aria-label={label} title={label}
-      style={{ left: point.x, top: point.y }}
-      onClick={(event) => event.stopPropagation()}
-      onPointerDown={(event) => {
-        if (event.button !== 0 || drag.current) return;
-        event.stopPropagation();
-        event.preventDefault();
-        const origin = screenToFlowPosition({ x: event.clientX, y: event.clientY }, { snapToGrid: false });
-        drag.current = { id: event.pointerId, origin, move: beginDrag() };
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }}
-      onPointerMove={(event) => {
-        const active = drag.current;
-        if (!active || event.pointerId !== active.id) return;
-        event.stopPropagation();
-        const pointer = screenToFlowPosition({ x: event.clientX, y: event.clientY }, { snapToGrid: false });
-        active.move({ x: pointer.x - active.origin.x, y: pointer.y - active.origin.y });
-      }}
-      onLostPointerCapture={() => { drag.current = null; }}
+      style={{ left: point.x, top: point.y, cursor: axis ? (axis === 'x' ? 'ew-resize' : 'ns-resize') : undefined }}
+      onClick={(event) => event.stopPropagation()} {...drag}
     />
   );
 }
 
 function LinkLine({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition,
-  markerEnd, interactionWidth, data, selected }: EdgeProps<LinkEdge>) {
+  source, target, markerEnd, interactionWidth, data, selected }: EdgeProps<LinkEdge>) {
+  const sourceNode = useInternalNode<StepNode>(source);
+  const targetNode = useInternalNode<StepNode>(target);
+  function card(node: typeof sourceNode) {
+    if (!node) return;
+    return { ...node.internals.positionAbsolute,
+      ...stepLayout({ title: node.data.title, width: node.measured.width ?? node.width,
+        height: node.measured.height ?? node.height }) };
+  }
   const from = cardAnchor(sourceX, sourceY, sourcePosition);
   const to = cardAnchor(targetX, targetY, targetPosition);
-  const { startControl, midpoint, endControl } = linkCurve(from, to, data?.lane ?? 0, data?.curve);
-  const path = `M ${from.x},${from.y} C ${startControl.x},${startControl.y} ${endControl.x},${endControl.y} ${to.x},${to.y}`;
+  const geometry = linkGeometry(from, to, data ?? {}, card(sourceNode), card(targetNode));
+  const { path, midpoint, curve, orthogonal } = geometry;
   const condition = data?.condition.trim();
   const select = data?.select;
-  const changeCurve = selected ? data?.changeCurve : undefined;
-  const labelGap = changeCurve ? 18 : 5;
+  const changeCurve = selected && curve ? data?.changeCurve : undefined;
+  const changeRoute = selected && orthogonal ? data?.changeRoute : undefined;
+  const labelGap = changeCurve || changeRoute ? 18 : 5;
   const labelStyle = { transform: `translate(${midpoint.x}px, ${midpoint.y - labelGap}px) translate(-50%, -100%)` };
+  const startControl = curve?.startControl ?? from;
+  const endControl = curve?.endControl ?? to;
   const start = { x: startControl.x - from.x, y: startControl.y - from.y };
   const end = { x: endControl.x - to.x, y: endControl.y - to.y };
+  const sameOrientation = (from.side === 'right') === (to.side === 'left');
+  const primaryIndex = sameOrientation ? 2 : 1;
+  const routeControls = orthogonal?.controls.filter((segment) => data?.route
+    ? segment.index === primaryIndex || segment.length > 8 : segment.index === primaryIndex) ?? [];
 
   return <>
-    <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={interactionWidth} />
+    <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={interactionWidth}
+      style={{ strokeLinejoin: 'miter', strokeLinecap: 'butt' }} />
+    {orthogonal && changeRoute && <EdgeLabelRenderer>
+      {routeControls.map((segment) =>
+        <CurveHandle key={segment.index} center={segment.index === primaryIndex}
+          point={data?.route ? { x: (segment.a.x + segment.b.x) / 2, y: (segment.a.y + segment.b.y) / 2 } : midpoint}
+          label={!data?.route ? '직선을 꺾은선으로 조절'
+            : segment.axis === 'x' ? '수직 구간을 좌우로 조절' : '수평 구간을 위아래로 조절'}
+          axis={data?.route ? segment.axis : undefined}
+          beginDrag={() => {
+            const initial = !data?.route && sameOrientation ? { ...orthogonal.route, offset: 0 } : orthogonal.route;
+            return (delta) => {
+              const value = initial[segment.field] + delta[segment.axis] * segment.sign;
+              changeRoute(id, { ...initial, [segment.field]: segment.field === 'offset' ? value : Math.max(24, value) });
+            };
+          }} />
+      )}
+    </EdgeLabelRenderer>}
     {changeCurve && <>
       <path className="curve-guide"
         d={`M ${from.x},${from.y} L ${startControl.x},${startControl.y} M ${to.x},${to.y} L ${endControl.x},${endControl.y}`} />

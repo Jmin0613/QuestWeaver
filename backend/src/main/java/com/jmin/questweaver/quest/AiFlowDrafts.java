@@ -154,7 +154,8 @@ class AiFlowDrafts {
             }
         }
         List<FlowDocument.Link> connections = links.stream().map(link ->
-                new FlowDocument.Link(UUID.randomUUID(), ids.get(link.from()), ids.get(link.to()), link.condition())).toList();
+                new FlowDocument.Link(UUID.randomUUID(), ids.get(link.from()), ids.get(link.to()), link.condition(),
+                        null, FlowDocument.LinkKind.ORTHOGONAL, null)).toList();
         return new FlowDocument(placed, connections, FlowDocument.empty().viewport());
     }
 
