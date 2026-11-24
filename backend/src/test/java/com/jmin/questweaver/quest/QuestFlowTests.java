@@ -224,6 +224,66 @@ class QuestFlowTests {
         assertThat(read(flow)).isEqualTo(document);
     }
 
+    @Test
+    void savesQuestAndStepPlanningInWorkspaceWithoutOverwritingNewerBasicInformation() throws Exception {
+        String quest = newDraft("기존 퀘스트");
+        JsonNode legacy = read(quest);
+        assertThat(legacy.at("/planning/code").asString()).isEmpty();
+        assertThat(legacy.at("/planning/optional").asBoolean()).isFalse();
+        JsonNode document = json.valueToTree(example());
+        ObjectNode planning = ((ObjectNode) document.at("/steps/0")).putObject("planning");
+        planning.put("actionType", "COMBAT").put("target", "흑아").put("location", "성문")
+                .put("startCondition", "단계 시작").put("completionCondition", "흑아의 체력이 0이 되면 완료")
+                .put("stateChanges", "흑아전 완료 = true").put("rewards", "단계 보상")
+                .put("notes", "재도전 메모");
+        String workspace = quest + "/workspace";
+        JsonNode first = send("PUT", workspace, Map.of("flow", document, "planning", Map.of(
+                "code", "Q-001", "chapter", "챕터 1", "prerequisites", "이전 퀘스트 완료",
+                "optional", true, "rewards", "퀘스트 보상", "background", "기획 의도")), 200);
+        assertThat(first.path("flow")).isEqualTo(document);
+        assertThat(first.at("/quest/planning/rewards").asString()).isEqualTo("퀘스트 보상");
+        assertThat(first.at("/flow/steps/0/planning/rewards").asString()).isEqualTo("단계 보상");
+        send("PUT", quest, Map.of("title", "다른 창에서 바꾼 제목", "body", "최신 원문",
+                "writingState", "DRAFT", "planning", Map.of("rewards", "최신 보상")), 200);
+        JsonNode saved = send("PUT", workspace, Map.of("flow", document, "planning", Map.of("chapter", "챕터 2")), 200);
+        assertThat(saved.at("/quest/summary/title").asString()).isEqualTo("다른 창에서 바꾼 제목");
+        assertThat(saved.at("/quest/body").asString()).isEqualTo("최신 원문");
+        assertThat(saved.at("/quest/planning/code").asString()).isEqualTo("Q-001");
+        assertThat(saved.at("/quest/planning/rewards").asString()).isEqualTo("최신 보상");
+        assertThat(saved.at("/quest/planning/chapter").asString()).isEqualTo("챕터 2");
+        assertThat(saved.at("/quest/planning/optional").asBoolean()).isTrue();
+        assertThat(read(workspace)).isEqualTo(saved);
+        JsonNode withoutPlanning = document.deepCopy();
+        for (JsonNode step : withoutPlanning.path("steps")) ((ObjectNode) step).remove("planning");
+        assertThat(send("POST", "/api/flow/inspect", document, 200))
+                .isEqualTo(send("POST", "/api/flow/inspect", withoutPlanning, 200));
+        JsonNode invalid = document.deepCopy();
+        ((ObjectNode) invalid.at("/steps/0/planning")).put("actionType", "EXECUTE_CODE");
+        send("PUT", workspace, Map.of("flow", invalid, "planning", Map.of("code", "실패")), 400);
+        assertThat(read(workspace)).isEqualTo(saved);
+        JsonNode cleared = send("PUT", workspace,
+                Map.of("flow", document, "planning", Map.of("optional", false, "code", "")), 200);
+        assertThat(cleared.at("/quest/planning/optional").asBoolean()).isFalse();
+        assertThat(cleared.at("/quest/planning/code").asString()).isEmpty();
+        assertThat(cleared.at("/quest/planning/chapter").asString()).isEqualTo("챕터 2");
+    }
+
+    @Test
+    void rollsBackFlowAndQuestPlanningTogetherWhenDatabaseRejectsTheSave() throws Exception {
+        String quest = newDraft("원자적 저장");
+        String workspace = quest + "/workspace";
+        JsonNode before = read(workspace);
+        String id = quest.substring(quest.lastIndexOf('/') + 1);
+        jdbc.execute("alter table quest add constraint planning_atomic_test check (id <> UUID '" + id
+                + "' or planning_document not like '%ROLLBACK%')");
+        try {
+            send("PUT", workspace, Map.of("flow", example(), "planning", Map.of("code", "ROLLBACK")), 409);
+            assertThat(read(workspace)).isEqualTo(before);
+        } finally {
+            jdbc.execute("alter table quest drop constraint planning_atomic_test");
+        }
+    }
+
     private String newDraft(String title) throws Exception {
         String quest = "/api/quests/" + UUID.randomUUID();
         send("PUT", quest, Map.of("title", title, "body", "첫 줄\n둘째 줄", "author", "기획자",

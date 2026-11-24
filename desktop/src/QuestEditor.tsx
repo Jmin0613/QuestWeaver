@@ -3,6 +3,8 @@ import { errorMessage, request, useResource } from './api';
 import type { Option, QuestDetail, QuestFields, WritingState } from './api';
 import { useCloseGuard, useNavigationGuard } from './useCloseGuard';
 import type { NavigationGuard } from './useCloseGuard';
+import { planningPatch, questPlanning } from './planning';
+import { QuestPlanningFields } from './PlanningFields';
 
 type Props = {
   initial?: QuestDetail;
@@ -21,6 +23,7 @@ function fieldsFrom(quest?: QuestDetail): QuestFields {
     title: quest?.summary.title ?? '',
     author: quest?.author ?? '',
     body: quest?.body ?? '',
+    planning: questPlanning(quest?.planning),
   };
 }
 
@@ -37,8 +40,7 @@ export function QuestEditor({ initial, games, gamesError, reloadGames, onBack, o
   const [notice, setNotice] = useState('');
   const regionRoute = fields.gameId === null ? null : `/api/games/${fields.gameId}/regions`;
   const regions = useResource<Option[]>(regionRoute);
-  const dirty = name !== '' || (Object.keys(fields) as (keyof QuestFields)[])
-    .some((key) => fields[key] !== baseline[key]);
+  const dirty = name !== '' || JSON.stringify(fields) !== JSON.stringify(baseline);
   useCloseGuard(dirty || busy);
   const canLeave = useNavigationGuard(navigationGuard, running,
     dirty ? '저장하지 않은 변경이 있습니다. 작성 화면을 나갈까요?' : undefined);
@@ -74,7 +76,9 @@ export function QuestEditor({ initial, games, gamesError, reloadGames, onBack, o
       if (writingState === 'REGISTERED' && (!fields.gameId || !fields.title.trim() || !fields.body.trim())) {
         throw new Error('등록하려면 게임, 퀘스트명, 퀘스트 원문을 입력하세요.');
       }
-      const saved = await request<QuestDetail>('PUT', `/api/quests/${id}`, { ...fields, writingState });
+      const saved = await request<QuestDetail>('PUT', `/api/quests/${id}`, {
+        ...fields, writingState, planning: planningPatch(fields.planning, baseline.planning),
+      });
       if (writingState === 'REGISTERED') {
         onSaved(id);
         return;
@@ -181,6 +185,10 @@ export function QuestEditor({ initial, games, gamesError, reloadGames, onBack, o
           </div>
           <label htmlFor="quest-body">퀘스트 원문</label>
           <textarea id="quest-body" rows={8} value={fields.body} onChange={(event) => change({ body: event.target.value })} />
+          <details className="planning-group" open>
+            <summary>퀘스트 기획 정보 <span className="optional">선택</span></summary>
+            <QuestPlanningFields value={fields.planning} onChange={(planning) => change({ planning })} />
+          </details>
           <div className="actions">
             <button className="primary" type="submit" disabled={name !== ''}>{isRegistered ? '저장' : '등록'}</button>
             {!isRegistered && <button type="button" disabled={name !== ''} onClick={() => save('DRAFT')}>임시저장</button>}

@@ -8,6 +8,8 @@ import type { BackendStatus, Option, QuestDetail, QuestSummary, WritingState } f
 import { useNavigationGuard } from './useCloseGuard';
 import type { NavigationGuard } from './useCloseGuard';
 import './style.css';
+import { QuestPlanningDetails } from './PlanningFields';
+import { questPlanning } from './planning';
 
 type Filters = { search: string; gameId: string; regionId: string };
 const emptyFilters: Filters = { search: '', gameId: '', regionId: '' };
@@ -160,6 +162,7 @@ function QuestView({ id, onBack, onEdit, onFlow, navigationGuard }: {
           <div><dt>작성일</dt><dd><time dateTime={detail.createdAt}>{formatDate(detail.createdAt)}</time></dd></div>
           <div><dt>최종 수정일</dt><dd><time dateTime={info.updatedAt}>{formatDate(info.updatedAt)}</time></dd></div>
         </dl>
+        <QuestPlanningDetails value={questPlanning(detail.planning)} />
         <h3>퀘스트 원문</h3>
         <div className="quest-body">{detail.body?.trim() ? detail.body : '입력한 원문이 없습니다.'}</div>
         <FlowPreview questId={id} gameName={info.gameName ?? '게임 미선택'} title={questTitle(info.title)}
@@ -216,6 +219,7 @@ function App() {
         gamesError={games.error} reloadGames={games.reload} onSaved={openQuest}
         onBack={() => screen.quest ? openQuest(screen.quest.summary.id) : backToList()} />}
       {screen.kind === 'flow' && <FlowEditor quest={screen.quest} navigationGuard={navigationGuard}
+        onEdit={(quest) => setScreen({ kind: 'editor', quest })}
         onBack={() => openQuest(screen.quest.summary.id)} />}
     </main>
   );

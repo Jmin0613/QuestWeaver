@@ -8,6 +8,7 @@ import java.util.UUID;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 
 import org.springframework.http.HttpStatus;
@@ -25,10 +26,12 @@ class QuestStore {
     record Summary(UUID id, Long gameId, String gameName, Long regionId, String regionName,
                    String title, Quest.WritingState writingState, Instant updatedAt) {}
 
-    record Detail(Summary summary, String author, String body, Instant createdAt) {}
+    record Detail(Summary summary, String author, String body, Instant createdAt, QuestPlanning planning) {}
+    record Workspace(Detail quest, FlowDocument flow) {}
+    record WorkspaceInput(@NotNull @Valid FlowDocument flow, @Valid QuestPlanning.Patch planning) {}
 
     record Input(Long gameId, Long regionId, @Size(max = 200) String title, @Size(max = 120) String author,
-                 String body, @NotNull Quest.WritingState writingState) {}
+                 String body, @NotNull Quest.WritingState writingState, @Valid QuestPlanning.Patch planning) {}
 
     private final EntityManager db;
     private final ObjectMapper json;
@@ -126,6 +129,7 @@ class QuestStore {
         quest.author = optionalText(input.author());
         quest.body = input.body();
         quest.writingState = input.writingState();
+        if (input.planning() != null) quest.planningDocument = json.writeValueAsString(planning(quest).apply(input.planning()));
         quest.updatedAt = now;
         if (existing == null) {
             db.persist(quest);
@@ -154,19 +158,38 @@ class QuestStore {
         return requireQuest(db.find(Quest.class, id)).body;
     }
 
+    Workspace workspace(UUID id) {
+        return new Workspace(quest(id), flow(id));
+    }
+
+    @Transactional
+    Workspace saveWorkspace(UUID id, WorkspaceInput input) {
+        input.flow().validateShape();
+        Quest quest = requireQuest(db.find(Quest.class, id, LockModeType.PESSIMISTIC_WRITE));
+        if (input.planning() != null) quest.planningDocument = json.writeValueAsString(planning(quest).apply(input.planning()));
+        writeFlow(quest, input.flow());
+        db.flush();
+        db.refresh(quest);
+        return new Workspace(detail(quest), input.flow());
+    }
+
     @Transactional
     FlowDocument saveFlow(UUID id, FlowDocument document) {
         document.validateShape();
         Quest quest = requireQuest(db.find(Quest.class, id, LockModeType.PESSIMISTIC_WRITE));
+        writeFlow(quest, document);
+        return document;
+    }
+
+    private void writeFlow(Quest quest, FlowDocument document) {
         String snapshot = json.writeValueAsString(document);
-        QuestFlow flow = db.find(QuestFlow.class, id);
+        QuestFlow flow = db.find(QuestFlow.class, quest.id);
         if (flow == null) {
             db.persist(new QuestFlow(quest, snapshot));
         } else {
             flow.document = snapshot;
         }
         quest.updatedAt = Instant.now();
-        return document;
     }
 
     private Game requireGame(long id) {
@@ -192,11 +215,16 @@ class QuestStore {
         return quest;
     }
 
-    private static Detail detail(Quest q) {
+    private QuestPlanning planning(Quest quest) {
+        return quest.planningDocument == null ? QuestPlanning.empty()
+                : json.readValue(quest.planningDocument, QuestPlanning.class);
+    }
+
+    private Detail detail(Quest q) {
         Summary summary = new Summary(q.id, q.game == null ? null : q.game.id, q.game == null ? null : q.game.name,
                 q.region == null ? null : q.region.id, q.region == null ? null : q.region.name,
                 q.title, q.writingState, q.updatedAt);
-        return new Detail(summary, q.author, q.body, q.createdAt);
+        return new Detail(summary, q.author, q.body, q.createdAt, planning(q));
     }
 
     private static String requiredName(String rawName) {

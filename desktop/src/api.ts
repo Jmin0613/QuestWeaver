@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { QuestPlanning } from './planning';
 
 export type BackendStatus = {
   state: 'starting' | 'connected' | 'failed';
@@ -38,6 +39,7 @@ export type QuestDetail = {
   author: string | null;
   body: string | null;
   createdAt: string;
+  planning?: QuestPlanning;
 };
 export type QuestFields = {
   gameId: number | null;
@@ -45,6 +47,7 @@ export type QuestFields = {
   title: string;
   author: string;
   body: string;
+  planning: QuestPlanning;
 };
 
 export const stateLabels: Record<WritingState, string> = {

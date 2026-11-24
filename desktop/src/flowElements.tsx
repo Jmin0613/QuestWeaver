@@ -7,8 +7,9 @@ import { stepLabels } from './flowModel';
 import type { CurveOffsets, Direction, FlowDocument, Link, OrthogonalRoute, Step } from './flowModel';
 import { handleSize, linkGeometry, midpointControlWeight, normals, portAnchor } from './flowGeometry';
 import { minStepWidth, stepLayout } from './stepLayout';
+import { stepPlanning } from './planning';
 
-type StepData = Pick<Step, 'kind' | 'title' | 'description'> & { direction: Direction };
+type StepData = Pick<Step, 'kind' | 'title' | 'description'> & { direction: Direction; planning: ReturnType<typeof stepPlanning> };
 export type StepNode = Node<StepData, 'questStep'>;
 type CurveChange = (id: string, curve: CurveOffsets) => void;
 type RouteChange = (id: string, route: OrthogonalRoute) => void;
@@ -32,13 +33,13 @@ function nodeHandles(direction: Direction, width: number, height: number) {
   }));
 }
 
-export function asNode({ id, x, y, kind, title, description, direction = 'HORIZONTAL', ...size }: Step): StepNode {
+export function asNode({ id, x, y, kind, title, description, direction = 'HORIZONTAL', planning, ...size }: Step): StepNode {
   const { width, height } = stepLayout({ title, ...size });
   return {
     id,
     type: 'questStep',
     position: { x, y },
-    data: { kind, title, description, direction },
+    data: { kind, title, description, direction, planning: stepPlanning(planning) },
     initialWidth: width,
     initialHeight: height,
     style: { width, height },

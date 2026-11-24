@@ -6,7 +6,7 @@ import {
 import type { Connection } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import './flow.css';
-import { errorMessage, questTitle, request, useResource } from './api';
+import { errorMessage, questTitle, request, stateLabels, useResource } from './api';
 import type { QuestDetail } from './api';
 import { asEdge, asNode, FlowControls, flowEdgeTypes, flowFitOptions, flowNodeTypes, graphData, flowBounds, sizeNode, updateNodeData, withLanes } from './flowElements';
 import { AiFlowGenerator } from './AiFlowGenerator';
@@ -16,17 +16,20 @@ import type { CurveOffsets, Direction, FlowDocument, LinkKind, OrthogonalRoute, 
 import { useCloseGuard, useNavigationGuard } from './useCloseGuard';
 import type { NavigationGuard } from './useCloseGuard';
 import { FlowHistory } from './flowHistory';
+import { planningPatch, questPlanning } from './planning';
+import { QuestPlanningFields, StepPlanningFields } from './PlanningFields';
 
-type Props = { quest: QuestDetail; onBack: () => void; navigationGuard: NavigationGuard };
+type Props = { quest: QuestDetail; onBack: () => void; onEdit: (quest: QuestDetail) => void; navigationGuard: NavigationGuard };
+type Workspace = { quest: QuestDetail; flow: FlowDocument };
 type InspectionWarning = { code: string; stepId: string | null; reason: string };
 const kinds = Object.keys(stepLabels) as StepKind[];
 
-export function FlowEditor({ quest, onBack, navigationGuard }: Props) {
-  const route = `/api/quests/${quest.summary.id}/flow`;
-  const flow = useResource<FlowDocument>(route);
+export function FlowEditor({ quest, onBack, onEdit, navigationGuard }: Props) {
+  const route = `/api/quests/${quest.summary.id}/workspace`;
+  const flow = useResource<Workspace>(route);
   if (flow.data) {
-    return <ReactFlowProvider key={route}><FlowWorkspace quest={quest} onBack={onBack}
-      navigationGuard={navigationGuard} initial={flow.data} route={route} /></ReactFlowProvider>;
+    return <ReactFlowProvider key={route}><FlowWorkspace quest={flow.data.quest} onBack={onBack} onEdit={onEdit}
+      navigationGuard={navigationGuard} initial={flow.data.flow} route={route} /></ReactFlowProvider>;
   }
 
   return (
@@ -41,12 +44,17 @@ export function FlowEditor({ quest, onBack, navigationGuard }: Props) {
   );
 }
 
-function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props & { initial: FlowDocument; route: string }) {
+function FlowWorkspace({ quest, onBack, onEdit, navigationGuard, initial, route }: Props & { initial: FlowDocument; route: string }) {
   const canvas = useRef<HTMLDivElement>(null);
   const view = useReactFlow<StepNode, LinkEdge>();
   const [nodes, setNodes] = useNodesState(initial.steps.map(asNode));
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.links.map(asEdge));
-  const [savedGraph, setSavedGraph] = useState(() => JSON.stringify(graphData(nodes, edges)));
+  const [questInfo, setQuestInfo] = useState(quest);
+  const [planning, setPlanning] = useState(() => questPlanning(quest.planning));
+  const [savedPlanning, setSavedPlanning] = useState(planning);
+  const [tab, setTab] = useState<'quest' | 'element'>('quest');
+  const [inspectionOpen, setInspectionOpen] = useState(false);
+  const [savedGraph, setSavedGraph] = useState(() => JSON.stringify({ ...graphData(nodes, edges), planning }));
   const [saving, setSaving] = useState(false);
   const [appliedDraft, setAppliedDraft] = useState<FlowDocument>();
   const pending = useRef(false);
@@ -57,6 +65,7 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
   const [inspectionError, setInspectionError] = useState('');
 
   const selectLink = useCallback((id: string) => {
+    setTab('element');
     setNodes((current) => current.map((node) => node.selected ? { ...node, selected: false } : node));
     setEdges((current) => current.map((edge) => (edge.selected ?? false) === (edge.id === id)
       ? edge : { ...edge, selected: edge.id === id }));
@@ -75,7 +84,7 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
     saving ? undefined : updateRoute).map((edge) => ({
     ...edge, zIndex: edge.selected ? 1 : 0, reconnectable: !saving && !!edge.selected,
   })), [edges, selectLink, saving, updateCurve, updateRoute]);
-  const graph = useMemo(() => graphData(nodes, edges), [nodes, edges]);
+  const graph = useMemo(() => ({ ...graphData(nodes, edges), planning }), [nodes, edges, planning]);
   const signature = JSON.stringify(graph);
   const [history] = useState(() => new FlowHistory(graph));
   const historyGroup = useRef(0);
@@ -94,6 +103,7 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
     const selectedEdges = new Set(edges.filter((edge) => edge.selected).map((edge) => edge.id));
     setNodes(restored.steps.map((step) => ({ ...asNode(step), selected: selectedNodes.has(step.id) })));
     setEdges(restored.links.map((link) => ({ ...asEdge(link), selected: selectedEdges.has(link.id) })));
+    setPlanning(questPlanning(restored.planning));
     setError('');
     refreshHistory((revision) => revision + 1);
   }
@@ -127,7 +137,7 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
   const dirty = signature !== savedGraph;
   useCloseGuard(dirty || saving);
   const canLeave = useNavigationGuard(navigationGuard, pending,
-    dirty ? '저장하지 않은 플로우 변경이 있습니다. 편집 화면을 나갈까요?' : undefined);
+    dirty ? '저장하지 않은 기획 정보와 플로우 변경이 있습니다. 편집 화면을 나갈까요?' : undefined);
 
   useEffect(() => {
     if (!appliedDraft) return;
@@ -151,6 +161,7 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
 
   function addStep(kind: StepKind) {
     if (pending.current || !canvas.current) return;
+    setTab('element');
     const bounds = canvas.current.getBoundingClientRect();
     const zoom = view.getZoom();
     const columns = Math.max(1, Math.floor((bounds.width - 30) / (190 * zoom)));
@@ -222,8 +233,17 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
     setSaved(false);
     setError('');
     try {
-      await request<FlowDocument>('PUT', route, { ...graph, viewport: view.getViewport() });
-      setSavedGraph(signature);
+      const result = await request<Workspace>('PUT', route, {
+        flow: { steps: graph.steps, links: graph.links, viewport: view.getViewport() },
+        planning: planningPatch(planning, savedPlanning),
+      });
+      const saved = questPlanning(result.quest.planning);
+      const snapshot = { ...graph, planning: saved };
+      history.synchronize(snapshot);
+      setPlanning(saved);
+      setSavedPlanning(saved);
+      setQuestInfo(result.quest);
+      setSavedGraph(JSON.stringify(snapshot));
       setAppliedDraft(undefined);
       setSaved(true);
     } catch (failure) {
@@ -238,15 +258,25 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
     if (canLeave()) onBack();
   }
 
+  async function editQuest() {
+    if (!canLeave()) return;
+    try {
+      onEdit(await request<QuestDetail>('GET', `/api/quests/${quest.summary.id}`));
+    } catch (failure) {
+      setError(errorMessage(failure));
+    }
+  }
+
   async function inspect() {
     if (checking) return;
     setChecking(true);
     setInspectionError('');
     try {
       const warnings = await request<InspectionWarning[]>('POST', '/api/flow/inspect', {
-        ...graph, viewport: initial.viewport,
+        steps: graph.steps, links: graph.links, viewport: initial.viewport,
       });
       setInspection({ signature: inspectionSignature, warnings });
+      setInspectionOpen(true);
     } catch (failure) {
       setInspectionError(errorMessage(failure));
     } finally {
@@ -257,6 +287,7 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
   function focusStep(id: string) {
     const target = nodes.find((node) => node.id === id);
     if (!target) return;
+    setTab('element');
     setNodes((current) => current.map((node) => ({ ...node, selected: node.id === id })));
     setEdges((current) => current.map((edge) => edge.selected ? { ...edge, selected: false } : edge));
     canvas.current?.scrollIntoView({ block: 'nearest' });
@@ -279,15 +310,19 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
         if (event.target.matches('input, textarea, [contenteditable]')) historyGroup.current++;
       }}>
       <div className="section-heading flow-heading">
-        <div><h2 id="flow-heading">플로우 편집</h2><p className="hint">{questTitle(quest.summary.title)}</p></div>
+        <div><h2 id="flow-heading">{questTitle(questInfo.summary.title)}</h2><p className="hint">퀘스트 플로우 편집</p></div>
         <div className="flow-heading-actions">
           <button type="button" disabled={saving || !history.canUndo}
             title="실행 취소 (Ctrl+Z)" onClick={() => travelHistory('undo')}>실행 취소</button>
           <button type="button" disabled={saving || !history.canRedo}
             title="다시 실행 (Ctrl+Y)" onClick={() => travelHistory('redo')}>다시 실행</button>
           <button type="button" disabled={saving} onClick={back}>상세로 돌아가기</button>
-          <button type="button" className="primary" disabled={saving} onClick={() => void save()}>플로우 저장</button>
+          <button type="button" className="primary" disabled={saving} onClick={() => void save()}>저장</button>
           <button type="button" disabled={checking} onClick={() => void inspect()}>검사</button>
+          <details className="flow-ai-tools"><summary>AI 초안</summary>
+            <AiFlowGenerator route={route.replace('/workspace', '/flow')} ready={!saving}
+              hasSource={!!questInfo.body?.trim()} onApply={applyDraft} />
+          </details>
         </div>
       </div>
       <div className="flow-toolbar" aria-label="단계 추가">
@@ -300,12 +335,12 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
           })))}>모든 연결선 직선·꺾은선으로</button>
         <span className="flow-unsaved" style={{ visibility: dirty ? 'visible' : 'hidden' }}>저장하지 않은 변경</span>
       </div>
-      <AiFlowGenerator route={route} ready={!saving} hasSource={!!quest.body?.trim()} onApply={applyDraft} />
-      {saving && <p role="status">플로우를 저장하고 있습니다.</p>}
-      {saved && <p className="success" style={{ visibility: dirty ? 'hidden' : 'visible' }} role="status">플로우를 저장했습니다.</p>}
+      {saving && <p role="status">기획 정보와 플로우를 저장하고 있습니다.</p>}
+      {saved && <p className="success" style={{ visibility: dirty ? 'hidden' : 'visible' }} role="status">기획 정보와 플로우를 저장했습니다.</p>}
       {error && <p className="error" role="alert">{error}</p>}
-      <section className="flow-inspection" aria-label="플로우 검사 결과">
-        <p role="status"><strong>{inspectionStatus}</strong>{checking && ' · 플로우 검사 중…'}</p>
+      <details className="flow-inspection" aria-label="플로우 검사 결과" open={inspectionOpen}
+        onToggle={(event) => setInspectionOpen(event.currentTarget.open)}>
+        <summary>구조 검사 · <strong>{inspectionStatus}</strong>{checking && ' · 검사 중…'}</summary>
         {inspectionError && <p className="error" role="alert">검사 요청에 실패했습니다. {inspectionError}</p>}
         {inspection && !needsInspection && inspection.warnings.length > 0 && <ul>
           {inspection.warnings.map(({ code, stepId, reason }) => <li key={`${code}:${stepId}`}>
@@ -314,8 +349,8 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
             </button> : reason}
           </li>)}
         </ul>}
-        <p className="hint">단계와 연결 구조를 검사합니다. 조건 충족 여부와 게임 내 실행은 별도로 확인하세요.</p>
-      </section>
+        <p className="hint">그래프의 연결 구조를 검사합니다. 자유 입력한 조건·변수의 의미와 게임 내 실행은 검사 범위에 포함되지 않습니다.</p>
+      </details>
       <div className="flow-layout">
         <div ref={canvas} className="flow-canvas" onKeyDown={canvasKeyDown} role="region" aria-label="퀘스트 차트">
           <ReactFlow
@@ -325,6 +360,9 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
             onEdgesChange={onEdgesChange}
             onConnect={connect}
             onReconnect={reconnect}
+            onNodeClick={() => setTab('element')}
+            onNodeDragStart={() => setTab('element')}
+            onEdgeClick={() => setTab('element')}
             nodeTypes={flowNodeTypes}
             edgeTypes={flowEdgeTypes}
             defaultViewport={initial.viewport}
@@ -344,26 +382,73 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
           </ReactFlow>
         </div>
         <aside className="flow-sidebar">
-          <section aria-labelledby="flow-properties-heading">
+          <div className="flow-tabs" role="tablist" aria-label="기획 속성">
+            {(['quest', 'element'] as const).map((item) => <button key={item} type="button" role="tab"
+              id={item + '-tab'} aria-controls={item + '-properties'} aria-selected={tab === item}
+              tabIndex={tab === item ? 0 : -1} onClick={() => setTab(item)}
+              onKeyDown={(event) => {
+                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                event.preventDefault();
+                const next = event.key === 'Home' ? 'quest' : event.key === 'End' ? 'element'
+                  : item === 'quest' ? 'element' : 'quest';
+                setTab(next);
+                document.getElementById(next + '-tab')?.focus();
+              }}>{item === 'quest' ? '퀘스트 정보' : '선택 요소'}</button>)}
+          </div>
+          <section id="quest-properties" role="tabpanel" aria-labelledby="quest-tab" hidden={tab !== 'quest'}>
+            <h3>퀘스트 정보</h3>
+            <dl className="planning-details">
+              <div><dt>퀘스트명</dt><dd>{questTitle(questInfo.summary.title)}</dd></div>
+              <div><dt>게임</dt><dd>{questInfo.summary.gameName ?? '미선택'}</dd></div>
+              <div><dt>지역</dt><dd>{questInfo.summary.regionName ?? '미선택'}</dd></div>
+              <div><dt>작성 상태</dt><dd>{stateLabels[questInfo.summary.writingState]}</dd></div>
+            </dl>
+            <button type="button" disabled={saving} onClick={() => void editQuest()}>퀘스트 기본 정보 수정</button>
+            <details className="flow-reference">
+              <summary>퀘스트 원문</summary>
+              <div>{questInfo.body?.trim() ? questInfo.body : '입력한 원문이 없습니다.'}</div>
+            </details>
+            <fieldset disabled={saving}>
+              <details className="planning-group" open>
+                <summary>퀘스트 기획 정보 <span className="optional">선택</span></summary>
+                <QuestPlanningFields value={planning} onChange={setPlanning} />
+              </details>
+            </fieldset>
+          </section>
+          <section id="element-properties" role="tabpanel" aria-labelledby="element-tab" hidden={tab !== 'element'}>
             <h3 id="flow-properties-heading">선택한 요소</h3>
             {!step && !link && <p className="hint">단계나 연결선을 선택하면 속성을 편집할 수 있습니다. 채워진 출력 점에서 도착 단계의 흰 입력 점으로 끌어 놓으세요.</p>}
             {step && <fieldset disabled={saving}>
-              <label htmlFor="flow-step-kind">단계 종류</label>
-              <select id="flow-step-kind" value={step.data.kind} onChange={(event) => updateStep({ kind: event.target.value as StepKind })}>
-                {kinds.map((kind) => <option key={kind} value={kind}>{stepLabels[kind]}</option>)}
-              </select>
-              <label htmlFor="flow-step-direction">연결 방향</label>
-              <select id="flow-step-direction" value={step.data.direction}
-                onChange={(event) => updateStep({ direction: event.target.value as Direction })}>
-                {Object.entries(directionLabels).map(([direction, label]) =>
-                  <option key={direction} value={direction}>{label}</option>)}
-              </select>
-              <p className="hint">연결 방향을 바꾸면 이 단계에 붙은 수동 곡선과 직각 경로가 초기화됩니다.</p>
-              <label htmlFor="flow-step-title">단계 제목</label>
-              <textarea id="flow-step-title" rows={3} maxLength={200} value={step.data.title} onChange={(event) => updateStep({ title: event.target.value })} />
-              <label htmlFor="flow-step-description">단계 설명</label>
-              <textarea id="flow-step-description" rows={5} value={step.data.description}
-                onChange={(event) => updateStep({ description: event.target.value })} />
+              <details className="planning-group" open>
+                <summary>기본 정보</summary>
+                <label htmlFor="flow-step-kind">단계 종류</label>
+                <select id="flow-step-kind" value={step.data.kind} onChange={(event) => updateStep({ kind: event.target.value as StepKind })}>
+                  {kinds.map((kind) => <option key={kind} value={kind}>{stepLabels[kind]}</option>)}
+                </select>
+                <label htmlFor="flow-step-direction">연결 방향</label>
+                <select id="flow-step-direction" value={step.data.direction}
+                  onChange={(event) => updateStep({ direction: event.target.value as Direction })}>
+                  {Object.entries(directionLabels).map(([direction, label]) =>
+                    <option key={direction} value={direction}>{label}</option>)}
+                </select>
+                <p className="hint">연결 방향을 바꾸면 이 단계에 붙은 수동 곡선과 직각 경로가 초기화됩니다.</p>
+                <label htmlFor="flow-step-title">단계 제목</label>
+                <textarea id="flow-step-title" rows={3} maxLength={200} value={step.data.title} onChange={(event) => updateStep({ title: event.target.value })} />
+                <label htmlFor="flow-step-description">단계 설명</label>
+                <textarea id="flow-step-description" rows={5} value={step.data.description}
+                  onChange={(event) => updateStep({ description: event.target.value })} />
+                <StepPlanningFields group="basic" value={step.data.planning}
+                  onChange={(planning) => updateStep({ planning })} />
+              </details>
+              <details className="planning-group" open><summary>조건과 결과</summary>
+                <p className="hint">이 단계의 시작·완료 기준입니다. 다음 단계로 갈 분기 조건은 연결선에서 작성하세요.</p>
+                <StepPlanningFields group="conditions" value={step.data.planning}
+                  onChange={(planning) => updateStep({ planning })} />
+              </details>
+              <details className="planning-group" open><summary>메모</summary>
+                <StepPlanningFields group="notes" value={step.data.planning}
+                  onChange={(planning) => updateStep({ planning })} />
+              </details>
               <button type="button" className="danger" onClick={removeSelection}>단계 삭제</button>
             </fieldset>}
             {!step && link && <fieldset disabled={saving}>
@@ -379,6 +464,7 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
               </select>
               {link.data?.kind === 'ORTHOGONAL' && <p className="hint">노란 점을 끌면 꺾은선을 조절합니다. 수평 구간은 위아래로, 수직 구간은 좌우로 움직입니다.</p>}
               <label htmlFor="flow-link-condition">조건 또는 선택지</label>
+              <p className="hint">이 연결을 따라 다음 단계로 이동하는 분기 조건입니다. 단계 자체의 시작·완료 조건과 구분해 작성하세요.</p>
               <textarea id="flow-link-condition" rows={3} value={link.data?.condition ?? ''}
                 onChange={(event) => updateCondition(event.target.value)} />
               {link.data?.kind === 'ORTHOGONAL'
@@ -387,10 +473,6 @@ function FlowWorkspace({ quest, onBack, navigationGuard, initial, route }: Props
               <button type="button" className="danger" onClick={removeSelection}>연결선 삭제</button>
             </fieldset>}
           </section>
-          <details className="flow-reference">
-            <summary>퀘스트 원문</summary>
-            <div>{quest.body?.trim() ? quest.body : '입력한 원문이 없습니다.'}</div>
-          </details>
         </aside>
       </div>
     </section>

@@ -1,6 +1,7 @@
 import type { FlowDocument } from './flowModel';
+import type { QuestPlanning } from './planning';
 
-export type FlowGraph = Pick<FlowDocument, 'steps' | 'links'>;
+export type FlowGraph = Pick<FlowDocument, 'steps' | 'links'> & { planning?: QuestPlanning };
 
 /** A session stores domain snapshots, excluding selection and the viewport. */
 export class FlowHistory {
@@ -17,6 +18,12 @@ export class FlowHistory {
 
   get canUndo() { return this.past.length > 0; }
   get canRedo() { return this.future.length > 0; }
+
+  synchronize(graph: FlowGraph) {
+    this.present = graph;
+    this.signature = JSON.stringify(graph);
+    this.group = undefined;
+  }
 
   record(graph: FlowGraph, group: number): boolean {
     const signature = JSON.stringify(graph);

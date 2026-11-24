@@ -7,6 +7,8 @@ import { renderFlowPng } from './flowPng';
 import { asEdge, asNode, FlowControls, flowEdgeTypes, flowFitOptions, flowNodeTypes, flowBounds, withLanes } from './flowElements';
 import { stepLabels } from './flowModel';
 import type { FlowDocument } from './flowModel';
+import { StepPlanningDetails } from './PlanningFields';
+import { stepPlanning } from './planning';
 
 export function FlowPreview({ questId, gameName, title, onEdit, disabled }: {
   questId: string; gameName: string; title: string; onEdit: () => void; disabled: boolean;
@@ -116,6 +118,7 @@ export function PreviewChart({ flow, id }: { flow: FlowDocument; id?: string }) 
         <strong>{selected.title.trim() || '제목 없는 단계'}</strong>
         <span className="hint"> · {stepLabels[selected.kind]}</span>
         <p>{selected.description.trim() ? selected.description : '입력한 설명이 없습니다.'}</p>
+        <StepPlanningDetails value={stepPlanning(selected.planning)} />
       </div>}
     </>
   );

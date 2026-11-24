@@ -104,6 +104,14 @@ label {
 input, select, textarea { width: 100%; min-width: 0; padding: 8px 10px; }
 input, select { min-height: 39px; }
 textarea { display: block; min-height: 120px; resize: vertical; line-height: 1.55; }
+.planning-group { margin-top: 12px; padding-top: 10px; border-top: 1px solid #dce2ed; }
+.planning-group > summary { cursor: pointer; font-size: .88rem; font-weight: 650; padding-bottom: 8px; }
+.planning-fields { display: grid; gap: 10px; }
+.planning-checkbox { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.planning-checkbox input { width: 16px; min-height: 16px; height: 16px; margin: 0; }
+.planning-details { margin: 8px 0 16px; display: grid; gap: 10px; }
+.planning-details dt { font-size: .78rem; color: #55647a; margin-bottom: 3px; }
+.planning-details dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .9rem; }
 select:disabled { background-color: #f4f6fa; color: #536177; }
 fieldset { border: 0; margin: 16px 0 0; min-width: 0; padding: 0; }
 

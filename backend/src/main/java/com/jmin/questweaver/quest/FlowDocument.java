@@ -21,17 +21,33 @@ record FlowDocument(
     enum Kind { START, PROGRESS, BRANCH, END }
     enum Direction { HORIZONTAL, VERTICAL }
     enum LinkKind { ORTHOGONAL, CURVE }
+    enum ActionType { UNSPECIFIED, MOVE, DIALOGUE, COMBAT, INTERACTION, CUTSCENE, OTHER }
+
+    record StepPlanning(ActionType actionType, String target, String location, String startCondition,
+                        String completionCondition, String stateChanges, String rewards, String notes) {
+        StepPlanning {
+            actionType = actionType == null ? ActionType.UNSPECIFIED : actionType;
+            target = target == null ? "" : target;
+            location = location == null ? "" : location;
+            startCondition = startCondition == null ? "" : startCondition;
+            completionCondition = completionCondition == null ? "" : completionCondition;
+            stateChanges = stateChanges == null ? "" : stateChanges;
+            rewards = rewards == null ? "" : rewards;
+            notes = notes == null ? "" : notes;
+        }
+    }
 
     record Step(@NotNull UUID id, @NotNull Kind kind, @NotNull @Size(max = 200) String title,
                 @NotNull String description, @NotNull Double x, @NotNull Double y, Direction direction,
                 @JsonInclude(JsonInclude.Include.NON_NULL) Double width,
-                @JsonInclude(JsonInclude.Include.NON_NULL) Double height) {
+                @JsonInclude(JsonInclude.Include.NON_NULL) Double height,
+                @Valid @JsonInclude(JsonInclude.Include.NON_NULL) StepPlanning planning) {
         Step {
             direction = direction == null ? Direction.HORIZONTAL : direction;
         }
 
         Step(UUID id, Kind kind, String title, String description, Double x, Double y) {
-            this(id, kind, title, description, x, y, Direction.HORIZONTAL, null, null);
+            this(id, kind, title, description, x, y, Direction.HORIZONTAL, null, null, null);
         }
     }
 

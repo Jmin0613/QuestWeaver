@@ -13,9 +13,9 @@ let closeConfirmed = false;
 let status = { state: 'starting', message: '백엔드를 시작하고 있습니다.' };
 
 const allowedRoutes = {
-  GET: /^\/api\/(?:ai\/flow\/status|games(?:\/\d+\/regions)?|quests(?:\?[^#]*|\/[a-f\d-]{36}(?:\/flow)?)?)$/,
+  GET: /^\/api\/(?:ai\/flow\/status|games(?:\/\d+\/regions)?|quests(?:\?[^#]*|\/[a-f\d-]{36}(?:\/(?:flow|workspace))?)?)$/,
   POST: /^\/api\/(?:flow\/inspect|games(?:\/\d+\/regions)?|quests\/[a-f\d-]{36}\/flow\/generate)$/,
-  PUT: /^\/api\/quests\/[a-f\d-]{36}(?:\/flow)?$/,
+  PUT: /^\/api\/quests\/[a-f\d-]{36}(?:\/(?:flow|workspace))?$/,
   DELETE: /^\/api\/quests\/[a-f\d-]{36}$/,
 };
 

@@ -88,6 +88,16 @@ class QuestController {
         return store.saveFlow(id, document);
     }
 
+    @GetMapping("/quests/{id}/workspace")
+    QuestStore.Workspace workspace(@PathVariable UUID id) {
+        return store.workspace(id);
+    }
+
+    @PutMapping("/quests/{id}/workspace")
+    QuestStore.Workspace saveWorkspace(@PathVariable UUID id, @Valid @RequestBody QuestStore.WorkspaceInput input) {
+        return store.saveWorkspace(id, input);
+    }
+
     @PostMapping("/flow/inspect")
     List<FlowInspection.Warning> inspectFlow(@Valid @RequestBody FlowDocument document) {
         return FlowInspection.inspect(document);

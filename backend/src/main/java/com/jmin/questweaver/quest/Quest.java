@@ -36,6 +36,9 @@ class Quest {
     @Lob
     String body;
 
+    @Lob
+    String planningDocument;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     WritingState writingState;

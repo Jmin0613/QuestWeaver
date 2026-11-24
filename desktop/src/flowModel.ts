@@ -1,3 +1,5 @@
+import type { StepPlanning } from './planning';
+
 export const stepLabels = {
   START: '시작',
   PROGRESS: '진행',
@@ -22,6 +24,7 @@ export type Step = {
   direction?: Direction;
   width?: number;
   height?: number;
+  planning?: StepPlanning;
 };
 
 export type Link = {

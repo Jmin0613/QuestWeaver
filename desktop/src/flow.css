@@ -1,11 +1,20 @@
 main.flow-main {
-  max-width: 1500px;
-  padding: 18px clamp(12px, 2.75vw, 36px) 28px;
+  box-sizing: border-box;
+  max-width: none;
+  height: 100dvh;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
 }
 
-.flow-main .app-header { margin-bottom: 14px; }
-.flow-panel { padding: clamp(12px, 2vw, 22px); }
+.flow-main .app-header { margin-bottom: 0; flex-shrink: 0; }
+.flow-main .app-header h1 { font-size: 1.18rem; }
+.flow-panel { padding: 12px; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.flow-panel > :not(.flow-layout) { flex-shrink: 0; }
 .flow-heading { gap: 12px; }
+.flow-heading h2 { font-size: 1.12rem; }
 .flow-heading .hint { margin: 4px 0 0; overflow-wrap: anywhere; }
 
 .flow-heading-actions, .flow-toolbar {
@@ -15,18 +24,24 @@ main.flow-main {
   gap: 7px;
 }
 
-.flow-toolbar { margin: 14px 0 10px; }
-.flow-unsaved { color: #775515; font-size: 0.82rem; margin-left: auto; }
+.flow-toolbar { margin: 0; }
+.flow-heading-actions button, .flow-toolbar > button { min-height: 30px; padding: 5px 8px; }
+.flow-unsaved { color: #775515; font-size: 0.82rem; margin-left: auto; white-space: nowrap; flex-shrink: 0; }
 
 .flow-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(220px, 29%, 324px);
-  gap: 12px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) clamp(280px, 27%, 380px);
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .flow-canvas {
-  height: clamp(320px, calc(100vh - 230px), 880px);
+  box-sizing: border-box;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   background: #f7f9fe;
   border: 1px solid #dce2ed;
@@ -172,7 +187,8 @@ main.flow-main {
 .ai-flow-dialog::backdrop { background: #18243f80; }
 .ai-flow-dialog h3 { margin: 0; }
 
-.flow-inspection { margin-bottom: 12px; padding: 8px 12px; border: 1px solid #dce2ed; border-radius: 8px; }
+.flow-inspection { padding: 7px 10px; border: 1px solid #dce2ed; border-radius: 8px; }
+.flow-inspection summary { cursor: pointer; font-size: .85rem; }
 .flow-inspection p { margin: 3px 0; }
 .flow-inspection ul { max-height: 145px; overflow: auto; margin: 8px 0; padding-left: 20px; }
 .flow-inspection li { margin-bottom: 4px; overflow-wrap: anywhere; }
@@ -183,8 +199,16 @@ main.flow-main {
   border: 1px solid #dce2ed;
   border-radius: 10px;
   background: #f7f9fe;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
+.flow-sidebar [hidden] { display: none; }
+.flow-tabs { display: flex; gap: 6px; position: sticky; top: -13px; padding: 8px 0; background: #f7f9fe; z-index: 6; }
+.flow-tabs button { flex: 1; }
+.flow-tabs [aria-selected="true"] { background: #344c94; border-color: #344c94; color: white; }
 .flow-sidebar h3 { margin: 0 0 12px; }
 .flow-sidebar fieldset { margin-top: 0; }
 .flow-sidebar label { margin-top: 10px; }
@@ -195,8 +219,25 @@ main.flow-main {
 .flow-reference summary { cursor: pointer; font-size: 0.875rem; font-weight: 650; }
 .flow-reference div { margin-top: 8px; max-height: 220px; overflow: auto; overflow-wrap: anywhere; white-space: pre-wrap; font-size: 0.85rem; }
 
-@media (max-width: 670px) {
-  .flow-layout { grid-template-columns: 1fr; }
-  .flow-canvas { height: 400px; }
-  .flow-heading { align-items: flex-start; flex-direction: column; }
+.flow-ai-tools { position: relative; font-size: .85rem; }
+.flow-ai-tools > summary { cursor: pointer; padding: 6px 8px; border: 1px solid #cbd4e3; border-radius: 7px; }
+.flow-ai-tools .ai-flow { position: absolute; top: 100%; right: 0; width: min(330px, 75vw); padding: 12px; border: 1px solid #dce2ed; border-radius: 8px; background: white; box-shadow: 0 8px 24px #18243f20; z-index: 10; }
+.flow-panel > .success, .flow-panel > .error, .flow-panel > p { margin: 0; padding: 5px 9px; }
+
+@media (max-width: 760px) {
+  main.flow-main { padding: 6px; gap: 5px; }
+  .flow-panel { padding: 7px; gap: 6px; }
+  .flow-heading { align-items: flex-start; flex-wrap: wrap; }
+  .flow-layout { grid-template-columns: minmax(120px, 1fr) minmax(210px, 43%); gap: 6px; }
+  .flow-toolbar { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .flow-toolbar > button { flex-shrink: 0; }
+  .flow-sidebar { padding: 9px; }
+  .flow-tabs { top: -9px; }
+  .flow-heading-actions { gap: 4px; }
+  .flow-heading-actions button { font-size: .76rem; padding: 4px 6px; }
+}
+
+@media (max-height: 570px) {
+  .flow-heading .hint { display: none; }
+  .flow-inspection[open] { max-height: 100px; overflow-y: auto; }
 }
