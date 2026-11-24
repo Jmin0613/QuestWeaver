@@ -1,11 +1,13 @@
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron');
 const { mkdirSync } = require('node:fs');
 const path = require('node:path');
 const { startBackend } = require('./backend.cjs');
+const { createAiSettings } = require('./aiSettings.cjs');
 const { savePng } = require('./pngExport.cjs');
 
 let window;
 let backend;
+let aiSettings;
 let stopping = false;
 let readyToQuit = false;
 let closeGuard = false;
@@ -57,7 +59,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   ipcMain.on('backend:subscribe', (event) => {
-    if (window && !window.isDestroyed() && event.sender === window.webContents) {
+    if (isAppFrame(event)) {
       publishStatus();
     }
   });
@@ -71,6 +73,24 @@ if (!app.requestSingleInstanceLock()) {
     return backend.request(method, route, body);
   });
 
+  ipcMain.handle('ai:status', async (event) => {
+    if (!isAppFrame(event) || !aiSettings || stopping) return { ok: false, message: 'AI 설정을 열 수 없습니다.' };
+    return { ok: true, data: await aiSettings.status() };
+  });
+  ipcMain.handle('ai:save', (event, value, store) => {
+    if (!isAppFrame(event) || !aiSettings || stopping) return { ok: false, message: 'AI 설정을 변경할 수 없습니다.' };
+    return aiSettings.save(value, store);
+  });
+  ipcMain.handle('ai:delete', (event) => {
+    if (!isAppFrame(event) || !aiSettings || stopping) return { ok: false, message: 'AI 설정을 변경할 수 없습니다.' };
+    return aiSettings.remove();
+  });
+  ipcMain.handle('ai:key-page', async (event) => {
+    if (!isAppFrame(event) || stopping) return false;
+    try { await shell.openExternal('https://platform.openai.com/api-keys'); return true; }
+    catch { return false; }
+  });
+
   ipcMain.handle('flow:save-png', (event, title, bytes) => {
     if (!isAppFrame(event) || stopping) return { status: 'error', message: 'PNG 저장을 시작할 수 없습니다.' };
     return savePng(window, title, bytes);
@@ -80,7 +100,12 @@ if (!app.requestSingleInstanceLock()) {
     if (isAppFrame(event)) closeGuard = guarded === true;
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
+    if (stopping) return;
+    aiSettings = createAiSettings({ directory: app.getPath('userData'), safeStorage,
+      environmentKey: process.env.QUESTWEAVER_OPENAI_API_KEY,
+      model: process.env.QUESTWEAVER_OPENAI_MODEL?.trim() ?? 'gpt-5.4-mini' });
+    await aiSettings.ready;
     if (stopping) return;
     window = new BrowserWindow({
       width: 960,
@@ -121,7 +146,7 @@ if (!app.requestSingleInstanceLock()) {
     const resources = process.resourcesPath;
     try {
       backend = startBackend({
-        allowAi: !app.isPackaged,
+        getAiKey: () => aiSettings.key(),
         java: app.isPackaged
           ? path.join(resources, 'runtime', 'bin', 'java.exe')
           : path.join(process.env.JAVA_HOME, 'bin', 'java.exe'),

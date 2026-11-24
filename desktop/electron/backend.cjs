@@ -1,15 +1,16 @@
+const { randomBytes } = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { mkdirSync } = require('node:fs');
 const path = require('node:path');
 const { createInterface } = require('node:readline');
 
-function startBackend({ java, jar, dataDir, onStatus, allowAi }) {
+function startBackend({ java, jar, dataDir, onStatus, getAiKey }) {
   mkdirSync(dataDir, { recursive: true });
   const env = { ...process.env, QUESTWEAVER_DATA_DIR: dataDir.replaceAll('\\', '/') };
-  if (!allowAi) {
-    for (const name of Object.keys(env)) {
-      if (name.toUpperCase() === 'QUESTWEAVER_OPENAI_API_KEY') delete env[name];
-    }
+  const token = randomBytes(32).toString('hex');
+  env.QUESTWEAVER_DESKTOP_TOKEN = token;
+  for (const name of Object.keys(env)) {
+    if (name.toUpperCase() === 'QUESTWEAVER_OPENAI_API_KEY') delete env[name];
   }
   const child = spawn(java, [
     '-jar', jar,
@@ -54,9 +55,16 @@ function startBackend({ java, jar, dataDir, onStatus, allowAi }) {
     }
     const generation = method === 'POST' && route.endsWith('/flow/generate');
     try {
+      const headers = { Authorization: 'Bearer ' + token };
+      if (body !== undefined) headers['Content-Type'] = 'application/json';
+      if (generation) {
+        const key = await getAiKey();
+        if (!key) return { ok: false, message: 'AI 설정에서 API 키를 등록하세요.' };
+        headers['X-QuestWeaver-AI-Key'] = key;
+      }
       const response = await fetch(origin + route, {
         method,
-        headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+        headers,
         body: body === undefined ? undefined : JSON.stringify(body),
         redirect: 'error',
         signal: AbortSignal.timeout(generation ? 65_000 : 15_000),
@@ -67,7 +75,7 @@ function startBackend({ java, jar, dataDir, onStatus, allowAi }) {
       return { ok: false, message: (response.status < 500 || generation) && typeof data?.message === 'string'
         ? data.message : '요청을 처리하지 못했습니다. 다시 시도하세요.' };
     } catch (error) {
-      console.error('[backend request]', method, error.message);
+      console.error('[backend request]', method, 'transport failure');
       if (generation && error.name === 'TimeoutError') {
         return { ok: false, message: 'AI 생성 응답 시간이 초과되었습니다. 다시 시도하세요.' };
       }
@@ -95,6 +103,7 @@ function startBackend({ java, jar, dataDir, onStatus, allowAi }) {
     try {
       origin = `http://127.0.0.1:${ready[1]}`;
       const response = await fetch(origin + '/api/status', {
+        headers: { Authorization: 'Bearer ' + token },
         redirect: 'error',
         signal: AbortSignal.any([healthRequest.signal, AbortSignal.timeout(5_000)]),
       });

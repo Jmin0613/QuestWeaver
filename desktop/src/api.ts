@@ -6,12 +6,18 @@ export type BackendStatus = {
   message: string;
 };
 
+export type AiSettingsStatus = { source: 'none' | 'session' | 'stored' | 'environment'; configured: boolean; model: string; secureStorageAvailable: boolean; warning: string };
+
 type Reply = { ok: true; data?: unknown } | { ok: false; message: string };
 type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 declare global {
   interface Window {
     questWeaver: {
+      aiStatus(): Promise<Reply>;
+      saveAiKey(value: string, store: boolean): Promise<Reply>;
+      deleteAiKey(): Promise<Reply>;
+      openAiKeyPage(): Promise<boolean>;
       request(method: Method, route: string, body?: object): Promise<Reply>;
       saveFlowPng(title: string, bytes: Uint8Array): Promise<
         { status: 'saved' | 'canceled' } | { status: 'error'; message: string }

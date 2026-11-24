@@ -47,6 +47,8 @@ release/
 *.key
 *.pfx
 *.p12
+openai-key.enc
+openai-key.enc.tmp
 
 # 로그
 *.log

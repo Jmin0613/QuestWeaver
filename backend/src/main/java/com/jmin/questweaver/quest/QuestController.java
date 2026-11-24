@@ -109,8 +109,9 @@ class QuestController {
     }
 
     @PostMapping(path = "/quests/{id}/flow/generate", consumes = "application/json")
-    AiFlowDrafts.Draft generateFlow(@PathVariable UUID id) {
-        return ai.generate(id);
+    AiFlowDrafts.Draft generateFlow(@PathVariable UUID id,
+            @org.springframework.web.bind.annotation.RequestHeader(name = "X-QuestWeaver-AI-Key", required = false) String key) {
+        return ai.generate(id, key);
     }
 
     @DeleteMapping("/quests/{id}")

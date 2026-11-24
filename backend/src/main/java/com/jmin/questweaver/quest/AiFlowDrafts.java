@@ -73,16 +73,21 @@ class AiFlowDrafts {
     }
 
     Draft generate(UUID questId) {
+        return generate(questId, null);
+    }
+
+    Draft generate(UUID questId, String key) {
         String source = quests.source(questId);
         if (source == null || source.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "저장된 퀘스트 원문을 먼저 작성하세요.");
         }
-        if (!configured()) throw AiDraftFailure.CONFIGURATION.error();
+        if ((key == null || key.isBlank()) && !configured()) throw AiDraftFailure.CONFIGURATION.error();
         if (!generation.tryAcquire()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 AI 플로우를 생성하고 있습니다. 잠시 후 다시 시도하세요.");
         }
         try {
-            return parse(provider.generate(INSTRUCTIONS, source, schema));
+            return parse(key == null ? provider.generate(INSTRUCTIONS, source, schema)
+                    : provider.generate(INSTRUCTIONS, source, schema, key));
         } finally {
             generation.release();
         }

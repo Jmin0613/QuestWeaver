@@ -115,7 +115,7 @@ class AiFlowDraftTests {
         assertThatThrownBy(() -> OpenAiDraftProvider.checkStatus(401))
                 .isInstanceOf(ResponseStatusException.class).hasMessageContaining("인증");
         assertThatThrownBy(() -> OpenAiDraftProvider.checkStatus(429))
-                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("한도");
+                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("호출 제한");
         assertThatThrownBy(() -> OpenAiDraftProvider.completedText(json.readTree("{\"status\":\"incomplete\"}")))
                 .hasMessageContaining("끝까지");
         assertThatThrownBy(() -> OpenAiDraftProvider.completedText(json.readTree("""

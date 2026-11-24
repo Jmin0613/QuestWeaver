@@ -1,6 +1,10 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('questWeaver', {
+  aiStatus: () => ipcRenderer.invoke('ai:status'),
+  saveAiKey: (value, store) => ipcRenderer.invoke('ai:save', value, store),
+  deleteAiKey: () => ipcRenderer.invoke('ai:delete'),
+  openAiKeyPage: () => ipcRenderer.invoke('ai:key-page'),
   request(method, route, body) {
     return ipcRenderer.invoke('backend:request', method, route, body);
   },

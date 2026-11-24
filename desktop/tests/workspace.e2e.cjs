@@ -68,7 +68,7 @@ const inMain = (fn, ...args) => evaluate(main, '(' + fn.toString() + ')(...' + J
 const api = (method, route, body) => run((m, r, b) => window.questWeaver.request(m, r, b ?? undefined), method, route, body ?? null);
 const has = (text) => until(() => run((t) => document.body.innerText.includes(t), text), text);
 
-async function start() {
+async function start({ environmentKey } = {}) {
   logs = '';
   const server = net.createServer().listen(0, '127.0.0.1');
   await once(server, 'listening');
@@ -80,6 +80,7 @@ async function start() {
     if (upper === 'QUESTWEAVER_OPENAI_API_KEY' || upper === 'SPRING_APPLICATION_JSON'
         || upper.startsWith('SPRING_DATASOURCE_')) delete env[key];
   }
+  if (environmentKey) env.QUESTWEAVER_OPENAI_API_KEY = environmentKey;
   env.SPRING_DATASOURCE_URL = 'jdbc:h2:file:' + databaseFile.replaceAll('\\', '/');
   env.SPRING_DATASOURCE_USERNAME = 'questweaver_test';
   env.SPRING_DATASOURCE_PASSWORD = '';
@@ -148,7 +149,8 @@ async function size(width, height) {
 
 async function button(label) {
   await run((label) => {
-    const element = [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === label);
+    const root = document.querySelector('dialog[open]') || document;
+    const element = [...root.querySelectorAll('button')].find((button) => button.textContent.trim() === label);
     if (!element || element.disabled) throw new Error('Unavailable button ' + label);
     element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
     element.focus();
@@ -444,7 +446,7 @@ async function mainTest() {
   assert.ok(!(await run(() => window.pngText)).some((text) => ['단계 보상', '퀘스트 전체 보상', '재도전 시 컷신 생략'].includes(text)));
   assert.deepEqual((await api('GET', workspaceRoute)).data, saved);
 
-  // Mock both AI endpoints. The application cannot call an external AI service here.
+  // Mock generation and register a fake session key. The application cannot call an external AI service here.
   const draft = { ...flow, steps: [{ ...startStep, title: 'AI 생성 단계' }], links: [] };
   await inMain((draft) => {
     const ipc = process.mainModule.require('electron').ipcMain;
@@ -455,6 +457,7 @@ async function mainTest() {
       route.endsWith('/generate') ? { ok: true, data: { flow: draft, needsReview: [] } } :
       globalThis.originalRequest(event, method, route, body));
   }, draft);
+  assert.equal((await run(() => window.questWeaver.saveAiKey('fake-workspace-key', false))).ok, true);
   await button('플로우 편집');
   await until(() => value('quest-plan-code').then((result) => result === 'Q-BOSS-01'), 'AI editor');
   await run(() => { window.confirm = () => true; document.querySelector('.flow-ai-tools').open = true; });
@@ -481,13 +484,17 @@ async function mainTest() {
   console.log('Verification images: ' + output);
 }
 
-mainTest().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-}).finally(async () => {
+async function cleanup() {
   await stop().catch(() => { main?.socket.close(); page?.socket.close(); app?.kill(); });
   if (path.dirname(fs.realpathSync(profile)) === fs.realpathSync(os.tmpdir())
       && path.basename(profile).startsWith('qw-workspace-')) {
     fs.rmSync(profile, { recursive: true, force: true, maxRetries: 6 });
   }
-});
+}
+
+if (require.main === module) {
+  mainTest().catch((error) => { console.error(error); process.exitCode = 1; }).finally(cleanup);
+} else {
+  module.exports = { start, stop, cleanup, run, inMain, api, has, until, button, set, value, dirty, graph, screenshot,
+    get profile() { return dataProfile; }, get logs() { return logs; }, get databaseFile() { return databaseFile; } };
+}

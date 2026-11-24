@@ -1,3 +1,4 @@
+import { AiSettingsProvider, useAiSettings } from './AiSettings';
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QuestEditor } from './QuestEditor';
@@ -180,6 +181,7 @@ function QuestView({ id, onBack, onEdit, onFlow, navigationGuard }: {
 }
 
 function App() {
+  const aiSettings = useAiSettings();
   const [backend, setBackend] = useState<BackendStatus>({
     state: 'starting',
     message: '백엔드를 시작하고 있습니다.',
@@ -204,6 +206,7 @@ function App() {
       <header className="app-header">
         <h1><button type="button" className="app-logo" onClick={goToList}
           aria-label="QuestWeaver 퀘스트 목록">QuestWeaver</button></h1>
+        <button type="button" className="app-settings" onClick={() => void aiSettings.open()}>설정</button>
         <span className={`status connection ${backend.state}`} role="status" title={backend.message}>
           {connectionLabels[backend.state]}
         </span>
@@ -225,4 +228,4 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('root')!).render(<App />);
+createRoot(document.getElementById('root')!).render(<AiSettingsProvider><App /></AiSettingsProvider>);

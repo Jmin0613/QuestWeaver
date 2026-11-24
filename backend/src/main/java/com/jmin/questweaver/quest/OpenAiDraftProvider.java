@@ -9,11 +9,13 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -23,14 +25,20 @@ import tools.jackson.databind.ObjectMapper;
 class OpenAiDraftProvider implements AiDraftProvider {
     private static final URI RESPONSES = URI.create("https://api.openai.com/v1/responses");
     private static final Duration TIMEOUT = Duration.ofSeconds(55);
-    private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+    private final HttpClient client;
     private final ObjectMapper json;
     private final String apiKey;
     private final String model;
 
+    @Autowired
     OpenAiDraftProvider(ObjectMapper json,
             @Value("${QUESTWEAVER_OPENAI_API_KEY:}") String apiKey,
             @Value("${QUESTWEAVER_OPENAI_MODEL:gpt-5.4-mini}") String model) {
+        this(json, apiKey, model, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build());
+    }
+
+    OpenAiDraftProvider(ObjectMapper json, String apiKey, String model, HttpClient client) {
+        this.client = client;
         this.json = json;
         this.apiKey = apiKey.strip();
         this.model = model.strip();
@@ -43,7 +51,12 @@ class OpenAiDraftProvider implements AiDraftProvider {
 
     @Override
     public String generate(String instructions, String source, JsonNode schema) {
-        if (!configured()) throw AiDraftFailure.CONFIGURATION.error();
+        return generate(instructions, source, schema, apiKey);
+    }
+
+    @Override
+    public String generate(String instructions, String source, JsonNode schema, String key) {
+        if (key == null || key.isBlank() || model.isBlank()) throw AiDraftFailure.CONFIGURATION.error();
 
         var body = Map.of(
                 "model", model, "instructions", instructions, "input", source,
@@ -53,7 +66,7 @@ class OpenAiDraftProvider implements AiDraftProvider {
         HttpRequest request;
         try {
             request = HttpRequest.newBuilder(RESPONSES).timeout(TIMEOUT)
-                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Authorization", "Bearer " + key)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body))).build();
         } catch (IllegalArgumentException invalidHeader) {
@@ -75,7 +88,12 @@ class OpenAiDraftProvider implements AiDraftProvider {
             throw (failure.getCause() instanceof HttpTimeoutException
                     ? AiDraftFailure.TIMEOUT : AiDraftFailure.NETWORK).error();
         }
-        checkStatus(response.statusCode());
+        String code = "";
+        if (response.statusCode() >= 400) {
+            try { code = json.readTree(response.body()).path("error").path("code").asString(""); }
+            catch (RuntimeException ignored) { /* Never expose raw provider errors. */ }
+        }
+        checkStatus(response.statusCode(), code);
         try {
             return completedText(json.readTree(response.body()));
         } catch (JacksonException malformed) {
@@ -84,7 +102,19 @@ class OpenAiDraftProvider implements AiDraftProvider {
     }
 
     static void checkStatus(int status) {
+        checkStatus(status, "");
+    }
+
+    static void checkStatus(int status, String code) {
         if (status >= 200 && status < 300) return;
+        if ("invalid_api_key".equals(code) || "account_deactivated".equals(code)) {
+            throw AiDraftFailure.AUTHENTICATION.error();
+        }
+        if (Set.of("insufficient_quota", "billing_hard_limit_reached", "credit_balance_exhausted",
+                "organization_spend_limit_exceeded", "project_spend_limit_exceeded",
+                "organization_usage_limit_exceeded").contains(code)) {
+            throw AiDraftFailure.QUOTA.error();
+        }
         throw switch (status) {
             case 401, 403 -> AiDraftFailure.AUTHENTICATION.error();
             case 429 -> AiDraftFailure.LIMIT.error();
