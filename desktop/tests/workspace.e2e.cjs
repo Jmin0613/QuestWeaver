@@ -84,8 +84,9 @@ async function start({ environmentKey } = {}) {
   env.SPRING_DATASOURCE_URL = 'jdbc:h2:file:' + databaseFile.replaceAll('\\', '/');
   env.SPRING_DATASOURCE_USERNAME = 'questweaver_test';
   env.SPRING_DATASOURCE_PASSWORD = '';
-  app = spawn(path.join(desktop, 'node_modules/electron/dist/electron.exe'), [
-    '--inspect=0', '.', '--user-data-dir=' + path.join(profile, 'profile'),
+  const packagedExecutable = process.env.QUESTWEAVER_TEST_EXECUTABLE;
+  app = spawn(packagedExecutable || path.join(desktop, 'node_modules/electron/dist/electron.exe'), [
+    '--inspect=0', ...(packagedExecutable ? [] : ['.']), '--user-data-dir=' + path.join(profile, 'profile'),
     '--remote-debugging-port=' + port,
     '--disable-renderer-backgrounding', '--disable-background-timer-throttling',
   ], { cwd: desktop, env, windowsHide: true });
