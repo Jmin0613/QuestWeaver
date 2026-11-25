@@ -219,9 +219,9 @@ main.flow-main {
 .flow-reference summary { cursor: pointer; font-size: 0.875rem; font-weight: 650; }
 .flow-reference div { margin-top: 8px; max-height: 220px; overflow: auto; overflow-wrap: anywhere; white-space: pre-wrap; font-size: 0.85rem; }
 
-.flow-ai-tools { position: relative; font-size: .85rem; }
-.flow-ai-tools > summary { cursor: pointer; padding: 6px 8px; border: 1px solid #cbd4e3; border-radius: 7px; }
-.flow-ai-tools .ai-flow { position: absolute; top: 100%; right: 0; width: min(330px, 75vw); padding: 12px; border: 1px solid #dce2ed; border-radius: 8px; background: white; box-shadow: 0 8px 24px #18243f20; z-index: 10; }
+.flow-ai-tools, .flow-layout-menu { position: relative; font-size: .85rem; }
+.flow-ai-tools > summary, .flow-layout-menu > summary { cursor: pointer; padding: 6px 8px; border: 1px solid #cbd4e3; border-radius: 7px; }
+.flow-ai-tools .ai-flow, .auto-layout-options { position: absolute; top: 100%; right: 0; width: min(330px, 75vw); padding: 12px; border: 1px solid #dce2ed; border-radius: 8px; background: white; box-shadow: 0 8px 24px #18243f20; z-index: 10; }
 .flow-panel > .success, .flow-panel > .error, .flow-panel > p { margin: 0; padding: 5px 9px; }
 
 @media (max-width: 760px) {
@@ -241,3 +241,5 @@ main.flow-main {
   .flow-heading .hint { display: none; }
   .flow-inspection[open] { max-height: 100px; overflow-y: auto; }
 }
+
+.auto-layout-options button { display: block; width: 100%; margin-top: 8px; text-align: left; }

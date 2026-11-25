@@ -1,3 +1,5 @@
+import { autoLayout } from './flowLayout';
+import { stepLayout } from './stepLayout';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import {
@@ -8,7 +10,7 @@ import '@xyflow/react/dist/style.css';
 import './flow.css';
 import { errorMessage, questTitle, request, stateLabels, useResource } from './api';
 import type { QuestDetail } from './api';
-import { asEdge, asNode, FlowControls, flowEdgeTypes, flowFitOptions, flowNodeTypes, graphData, flowBounds, sizeNode, updateNodeData, withLanes } from './flowElements';
+import { asEdge, asNode, FlowControls, flowEdgeTypes, flowNodeTypes, graphData, flowBounds, sizeNode, updateNodeData, withLanes } from './flowElements';
 import { AiFlowGenerator } from './AiFlowGenerator';
 import type { LinkEdge, StepNode } from './flowElements';
 import { directionLabels, linkKindLabels, stepLabels } from './flowModel';
@@ -46,6 +48,7 @@ export function FlowEditor({ quest, onBack, onEdit, navigationGuard }: Props) {
 
 function FlowWorkspace({ quest, onBack, onEdit, navigationGuard, initial, route }: Props & { initial: FlowDocument; route: string }) {
   const canvas = useRef<HTMLDivElement>(null);
+  const layoutMenu = useRef<HTMLDetailsElement>(null);
   const view = useReactFlow<StepNode, LinkEdge>();
   const [nodes, setNodes] = useNodesState(initial.steps.map(asNode));
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.links.map(asEdge));
@@ -142,7 +145,8 @@ function FlowWorkspace({ quest, onBack, onEdit, navigationGuard, initial, route 
   useEffect(() => {
     if (!appliedDraft) return;
     if (appliedDraft.steps.length) {
-      void view.fitView(flowFitOptions);
+      const bounds = flowBounds(appliedDraft.steps.map(asNode), withLanes(appliedDraft.links.map(asEdge)));
+      if (bounds) void view.fitBounds(bounds, { padding: 0.2 });
     } else {
       void view.setViewport(appliedDraft.viewport);
     }
@@ -154,6 +158,15 @@ function FlowWorkspace({ quest, onBack, onEdit, navigationGuard, initial, route 
     setAppliedDraft(flow);
     setSaved(false);
     setError('');
+  }
+
+  function arrange(direction: Direction) {
+    if (pending.current || !nodes.length) return;
+    if (!window.confirm('차트 전체의 위치와 연결 방향을 변경하고 기존 수동 연결 경로를 초기화합니다. 실행 취소로 복원할 수 있습니다. 자동 배치할까요?')) return;
+    if (layoutMenu.current) layoutMenu.current.open = false;
+    history.record(graph, historyGroup.current);
+    historyGroup.current++;
+    applyDraft(autoLayout({ steps: graph.steps, links: graph.links, viewport: view.getViewport() }, direction, stepLayout));
   }
 
   const step = nodes.find((node) => node.selected);
@@ -319,6 +332,13 @@ function FlowWorkspace({ quest, onBack, onEdit, navigationGuard, initial, route 
           <button type="button" disabled={saving} onClick={back}>상세로 돌아가기</button>
           <button type="button" className="primary" disabled={saving} onClick={() => void save()}>저장</button>
           <button type="button" disabled={checking} onClick={() => void inspect()}>검사</button>
+          <details ref={layoutMenu} className="flow-layout-menu"><summary>자동 배치</summary>
+            <div className="auto-layout-options">
+              <p className="hint">차트 전체 위치와 연결 방향을 바꿉니다. 단계 하나의 연결 방향 설정과 별개입니다. 수동 연결 경로는 초기화됩니다.</p>
+              <button type="button" disabled={saving || !nodes.length} onClick={() => arrange('HORIZONTAL')}>가로: 왼쪽→오른쪽</button>
+              <button type="button" disabled={saving || !nodes.length} onClick={() => arrange('VERTICAL')}>세로: 위→아래</button>
+            </div>
+          </details>
           <details className="flow-ai-tools"><summary>AI 초안</summary>
             <AiFlowGenerator route={route.replace('/workspace', '/flow')} ready={!saving}
               hasSource={!!questInfo.body?.trim()} onApply={applyDraft} />

@@ -1,9 +1,11 @@
+import { autoLayout } from './flowLayout';
+import { stepLayout } from './stepLayout';
 import { useAiSettings } from './AiSettings';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { errorMessage, request } from './api';
 import { PreviewChart } from './FlowPreview';
-import type { FlowDocument } from './flowModel';
+import type { Direction, FlowDocument } from './flowModel';
 
 type Draft = { flow: FlowDocument; needsReview: string[] };
 
@@ -54,8 +56,8 @@ export function AiFlowGenerator({ route, ready, hasSource, onApply }: {
       {settings.status?.configured === false && <p className="hint">생성 버튼을 누르면 API 키를 등록할 수 있습니다.</p>}
       {generating && <p role="status">AI 생성 준비 또는 응답을 기다리고 있습니다…</p>}
       {error && <p className="error" role="alert">{error}</p>}
-      {draft && <DraftDialog draft={draft} canApply={ready} onCancel={() => setDraft(undefined)} onApply={() => {
-        onApply(draft.flow);
+      {draft && <DraftDialog draft={draft} canApply={ready} onCancel={() => setDraft(undefined)} onApply={(flow) => {
+        onApply(flow);
         setDraft(undefined);
       }} />}
     </div>
@@ -66,9 +68,11 @@ function DraftDialog({ draft, canApply, onCancel, onApply }: {
   draft: Draft;
   canApply: boolean;
   onCancel: () => void;
-  onApply: () => void;
+  onApply: (flow: FlowDocument) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const [direction, setDirection] = useState<Direction>('HORIZONTAL');
+  const arranged = useMemo(() => autoLayout(draft.flow, direction, stepLayout), [draft.flow, direction]);
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const element = dialog.current;
@@ -86,12 +90,18 @@ function DraftDialog({ draft, canApply, onCancel, onApply }: {
         <h3 id="ai-draft-title">AI 플로우 초안</h3>
         <div className="flow-heading-actions">
           <button type="button" autoFocus onClick={onCancel}>취소</button>
-          <button type="button" className="primary" disabled={!canApply} onClick={onApply}>적용</button>
+          <button type="button" className="primary" disabled={!canApply} onClick={() => onApply(arranged)}>적용</button>
         </div>
       </div>
       <p>적용하면 현재 편집 중인 차트가 교체됩니다. DB에 반영하려면 저장을 누르세요.</p>
-      {visible && (draft.flow.steps.length
-        ? <ReactFlowProvider><PreviewChart id="ai-draft-preview" flow={draft.flow} /></ReactFlowProvider>
+      <label>초안 자동 배치 <select aria-label="AI 초안 자동 배치" value={direction}
+        onChange={(event) => setDirection(event.target.value as Direction)}>
+        <option value="HORIZONTAL">가로: 왼쪽→오른쪽</option>
+        <option value="VERTICAL">세로: 위→아래</option>
+      </select></label>
+      <p className="hint">같은 생성 결과를 로컬에서 재배치합니다. 방향 변경으로 AI를 다시 호출하지 않습니다.</p>
+      {visible && (arranged.steps.length
+        ? <ReactFlowProvider key={direction}><PreviewChart id="ai-draft-preview" flow={arranged} /></ReactFlowProvider>
         : <p>추출된 단계가 없습니다.</p>)}
       {draft.needsReview.length > 0 && <>
         <h4>확인 필요</h4>
