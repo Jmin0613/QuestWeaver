@@ -59,7 +59,7 @@ function startBackend({ java, jar, dataDir, onStatus, getAiKey }) {
       if (body !== undefined) headers['Content-Type'] = 'application/json';
       if (generation) {
         const key = await getAiKey();
-        if (!key) return { ok: false, message: 'AI 설정에서 API 키를 등록하세요.' };
+        if (!key) return { ok: false, message: 'AI 연결 설정에서 API 키를 등록하세요.' };
         headers['X-QuestWeaver-AI-Key'] = key;
       }
       const response = await fetch(origin + route, {

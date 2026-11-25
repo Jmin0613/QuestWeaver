@@ -78,15 +78,15 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   ipcMain.handle('ai:status', async (event) => {
-    if (!isAppFrame(event) || !aiSettings || stopping) return { ok: false, message: 'AI 설정을 열 수 없습니다.' };
+    if (!isAppFrame(event) || !aiSettings || stopping) return { ok: false, message: 'AI 연결 설정을 열 수 없습니다.' };
     return { ok: true, data: await aiSettings.status() };
   });
   ipcMain.handle('ai:save', (event, value, store) => {
-    if (!isAppFrame(event) || !aiSettings || stopping) return { ok: false, message: 'AI 설정을 변경할 수 없습니다.' };
+    if (!isAppFrame(event) || !aiSettings || stopping) return { ok: false, message: 'AI 연결 설정을 변경할 수 없습니다.' };
     return aiSettings.save(value, store);
   });
   ipcMain.handle('ai:delete', (event) => {
-    if (!isAppFrame(event) || !aiSettings || stopping) return { ok: false, message: 'AI 설정을 변경할 수 없습니다.' };
+    if (!isAppFrame(event) || !aiSettings || stopping) return { ok: false, message: 'AI 연결 설정을 변경할 수 없습니다.' };
     return aiSettings.remove();
   });
   ipcMain.handle('ai:key-page', async (event) => {

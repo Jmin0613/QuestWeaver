@@ -22,7 +22,7 @@ async function guardExternalApi() {
         globalThis.aiCalls.push(options.headers['X-QuestWeaver-AI-Key']);
         if (globalThis.aiDelay) await new Promise((resolve) => { globalThis.finishAi = resolve; });
         if (globalThis.aiMode === 'failure') {
-          return new Response(JSON.stringify({ message: 'AI 서비스 인증에 실패했습니다. AI 설정에서 키를 다시 등록하세요.' }), { status: 502 });
+          return new Response(JSON.stringify({ message: 'AI 서비스 인증에 실패했습니다. AI 연결 설정에서 키를 다시 등록하세요.' }), { status: 502 });
         }
         return new Response(JSON.stringify({ flow: {
           steps: [{ id: '00000000-0000-4000-8000-000000000001', kind: 'START', title: '모의 생성', description: '', x: 0, y: 0 }],
@@ -64,14 +64,14 @@ async function main() {
   }), false, 'foreign frames cannot access AI settings IPC');
   assert.equal((await settingsStatus()).source, 'none');
   const id = randomUUID(), route = '/api/quests/' + id;
-  const quest = (await api('PUT', route, { title: 'AI 설정 검증', body: '훈련을 시작한다.', writingState: 'DRAFT' })).data;
+  const quest = (await api('PUT', route, { title: 'AI 연결 설정 검증', body: '훈련을 시작한다.', writingState: 'DRAFT' })).data;
   const flow = { steps: [{ id: randomUUID(), kind: 'START', title: '기존 단계', description: '', x: 20, y: 30 }],
     links: [], viewport: { x: 0, y: 0, zoom: 1 } };
   assert.equal((await api('PUT', route + '/flow', flow)).ok, true);
   // Reload list through navigation after creating the temporary quest.
   await button('퀘스트 추가');
   await button('목록으로 돌아가기');
-  await openFlow('AI 설정 검증');
+  await openFlow('AI 연결 설정 검증');
   const original = await graph();
   await button('AI로 플로우 생성');
   await has('저장하고 계속');
@@ -84,7 +84,7 @@ async function main() {
   assert.equal(await calls(), 0);
 
   // A normal settings save never generates, and clears its input immediately.
-  await button('설정');
+  await button('AI 연결 설정');
   await saveKey(fakeKey);
   await has('키 설정을 저장했습니다.');
   assert.equal(await value('openai-key'), '');
@@ -105,7 +105,7 @@ async function main() {
   await button('AI로 플로우 생성');
   await until(async () => await calls() === 2, 'one generation request');
   assert.equal(await run(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'AI로 플로우 생성').disabled), true);
-  await button('설정');
+  await button('AI 연결 설정');
   await button('등록한 키 삭제');
   await has('이미 진행 중인 생성 요청은 취소되지 않습니다.');
   await button('닫기');
@@ -146,7 +146,7 @@ async function main() {
 
   const secure = (await settingsStatus()).secureStorageAvailable;
   assert.equal(secure, true, 'This Windows test expects actual OS secure storage');
-  await button('설정');
+  await button('AI 연결 설정');
   await saveKey(persistentKey, true);
   await has('이 PC에 저장됨');
   assert.ok(!fs.readFileSync(path.join(h.profile, 'openai-key.enc')).includes(Buffer.from(persistentKey)));
@@ -161,12 +161,12 @@ async function main() {
   await start({ environmentKey });
   await guardExternalApi();
   assert.equal((await settingsStatus()).source, 'stored');
-  await openFlow('AI 설정 검증');
+  await openFlow('AI 연결 설정 검증');
   await button('AI로 플로우 생성');
   await has('AI 플로우 초안');
   assert.equal(await inMain(() => globalThis.aiCalls[0] === 'fake-ai-e2e-persistent'), true);
   await button('취소');
-  await button('설정');
+  await button('AI 연결 설정');
   await saveKey(fakeKey); // Explicit session replacement deletes the persistent key.
   await has('이번 실행에서만 사용');
   assert.equal(fs.existsSync(path.join(h.profile, 'openai-key.enc')), false);
@@ -182,7 +182,7 @@ async function main() {
   assert.equal((await api('GET', route + '/flow')).data.steps[0].title, '모의 생성');
   assert.equal((await api('GET', route)).data.author, quest.author);
   assert.ok(!h.logs.includes(fakeKey) && !h.logs.includes(environmentKey));
-  await button('설정');
+  await button('AI 연결 설정');
   await h.screenshot('ai-settings.png');
   console.log('PASS AI settings: cancellation, no implicit calls, single flight, failure retention, delayed result, explicit save, OS encrypted restart, session replacement, deletion/environment priority, no plaintext in temporary DB/logs');
 }

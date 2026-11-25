@@ -209,10 +209,12 @@ function App() {
       <header className="app-header">
         <h1><button type="button" className="app-logo" onClick={goToList}
           aria-label="QuestWeaver 퀘스트 목록">QuestWeaver</button></h1>
-        <button type="button" className="app-settings" onClick={() => void aiSettings.open()}>설정</button>
-        <span className={`status connection ${backend.state}`} role="status" title={backend.message}>
-          {connectionLabels[backend.state]}
-        </span>
+        <div className="app-header-actions">
+          <button type="button" className="app-settings" onClick={() => void aiSettings.open()}>AI 연결 설정</button>
+          <span className={`status connection ${backend.state}`} role="status" title={backend.message}>
+            {connectionLabels[backend.state]}
+          </span>
+        </div>
       </header>
       {backend.state === 'failed' && <p className="error" role="alert">{backend.message}</p>}
       {screen.kind === 'list' && <QuestList filters={filters} setFilters={setFilters} games={games}

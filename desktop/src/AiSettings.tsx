@@ -50,7 +50,7 @@ function SettingsDialog({ continuing, status, refresh, onStatus, close }: {
   const [notice, setNotice] = useState('');
   useEffect(() => {
     element.current?.showModal();
-    void refresh().catch(() => setError('AI 설정을 확인하지 못했습니다. 설정 창을 다시 열어 주세요.'));
+    void refresh().catch(() => setError('AI 연결 설정을 확인하지 못했습니다. 설정 창을 다시 열어 주세요.'));
     return () => element.current?.close();
   }, []); // The dialog is a new input session every time it opens.
   function cancel() {
@@ -82,11 +82,12 @@ function SettingsDialog({ continuing, status, refresh, onStatus, close }: {
       busy.current = false; setPending(false);
     }
   }
-  return <dialog ref={element} className="ai-settings-dialog" aria-labelledby="ai-settings-title" onCancel={(event) => {
+  return <dialog ref={element} className="ai-settings-dialog" aria-labelledby="ai-settings-title" aria-describedby="ai-settings-description" onCancel={(event) => {
     event.preventDefault(); cancel();
   }}>
-    <div className="section-heading"><h2 id="ai-settings-title">AI 설정</h2>
+    <div className="section-heading"><h2 id="ai-settings-title">AI 연결 설정</h2>
       <button type="button" disabled={pending} onClick={cancel}>닫기</button></div>
+    <p id="ai-settings-description">AI 초안 생성에 사용할 OpenAI API 키와 모델을 관리합니다.</p>
     <dl className="metadata">
       <div><dt>제공자</dt><dd>OpenAI</dd></div>
       <div><dt>현재 사용 모델</dt><dd>{status ? status.model || '모델 미설정' : '확인 중'}</dd></div>
