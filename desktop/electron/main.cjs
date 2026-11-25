@@ -1,9 +1,10 @@
-const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell, Menu } = require('electron');
 const { mkdirSync } = require('node:fs');
 const path = require('node:path');
 const { startBackend } = require('./backend.cjs');
 const { createAiSettings } = require('./aiSettings.cjs');
 const { savePng } = require('./pngExport.cjs');
+const { installKoreanMenu } = require('./menu.cjs');
 
 let window;
 let backend;
@@ -12,6 +13,7 @@ let stopping = false;
 let readyToQuit = false;
 let closeGuard = false;
 let closeConfirmed = false;
+let textEditing = false;
 let status = { state: 'starting', message: '백엔드를 시작하고 있습니다.' };
 
 const allowedRoutes = {
@@ -99,9 +101,13 @@ if (!app.requestSingleInstanceLock()) {
   ipcMain.on('editor:close-guard', (event, guarded) => {
     if (isAppFrame(event)) closeGuard = guarded === true;
   });
+  ipcMain.on('editor:text-focus', (event, focused) => {
+    if (isAppFrame(event)) textEditing = focused === true;
+  });
 
   app.whenReady().then(async () => {
     if (stopping) return;
+    installKoreanMenu(Menu);
     aiSettings = createAiSettings({ directory: app.getPath('userData'), safeStorage,
       environmentKey: process.env.QUESTWEAVER_OPENAI_API_KEY,
       model: process.env.QUESTWEAVER_OPENAI_MODEL?.trim() ?? 'gpt-5.4-mini' });
@@ -125,7 +131,7 @@ if (!app.requestSingleInstanceLock()) {
     // Let the renderer route history shortcuts to either the chart or the focused text field.
     window.webContents.on('before-input-event', (_event, input) => {
       window.webContents.setIgnoreMenuShortcuts(
-        input.control && !input.alt && ['z', 'y'].includes(input.key.toLowerCase()),
+        !textEditing && input.control && !input.alt && ['z', 'y'].includes(input.key.toLowerCase()),
       );
     });
     window.webContents.on('will-navigate', (event) => event.preventDefault());
@@ -137,7 +143,7 @@ if (!app.requestSingleInstanceLock()) {
     window.webContents.on('will-prevent-unload', (event) => {
       if (closeConfirmed || confirmClose()) event.preventDefault();
     });
-    window.webContents.on('did-finish-load', () => { closeGuard = false; });
+    window.webContents.on('did-finish-load', () => { closeGuard = false; textEditing = false; });
     window.loadFile(path.join(__dirname, '../dist/index.html')).catch((error) => {
       console.error('[renderer]', error);
       app.quit();

@@ -1,5 +1,13 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Native text undo/redo uses Electron menu accelerators. Outside inputs the chart owns them.
+function publishTextFocus() {
+  const element = document.activeElement;
+  ipcRenderer.send('editor:text-focus', !!element?.closest('input, textarea, select, [contenteditable]'));
+}
+document.addEventListener('focusin', publishTextFocus, true);
+document.addEventListener('focusout', () => queueMicrotask(publishTextFocus), true);
+
 contextBridge.exposeInMainWorld('questWeaver', {
   aiStatus: () => ipcRenderer.invoke('ai:status'),
   saveAiKey: (value, store) => ipcRenderer.invoke('ai:save', value, store),
