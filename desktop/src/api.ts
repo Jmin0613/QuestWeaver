@@ -10,10 +10,18 @@ export type AiSettingsStatus = { source: 'none' | 'session' | 'stored' | 'enviro
 
 type Reply = { ok: true; data?: unknown } | { ok: false; message: string };
 type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
+export type QuestFileResult = { status: 'canceled' } | { status: 'error'; message: string };
+export type QuestFilePreview = { status: 'preview'; ticket: string; summary: {
+  title: string | null; game: string | null; region: string | null; steps: number; links: number;
+} };
 
 declare global {
   interface Window {
     questWeaver: {
+      exportQuestFile(id: string): Promise<QuestFileResult | { status: 'saved' }>;
+      chooseQuestFile(): Promise<QuestFileResult | QuestFilePreview>;
+      importQuestFile(ticket: string): Promise<QuestFileResult | { status: 'imported'; quest: QuestDetail }>;
+      cancelQuestFile(ticket: string): void;
       aiStatus(): Promise<Reply>;
       saveAiKey(value: string, store: boolean): Promise<Reply>;
       deleteAiKey(): Promise<Reply>;

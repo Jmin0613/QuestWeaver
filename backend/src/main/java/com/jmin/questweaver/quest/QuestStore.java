@@ -148,6 +148,31 @@ class QuestStore {
         db.remove(quest);
     }
 
+    @Transactional
+    Detail importQuest(QuestFiles.PortableQuest input, FlowDocument flow) {
+        Long gameId = null, regionId = null;
+        String gameName = optionalText(input.game());
+        if (gameName != null) {
+            var games = db.createQuery("from Game g where g.nameKey = :key", Game.class)
+                    .setParameter("key", nameKey(gameName)).getResultList();
+            gameId = games.isEmpty() ? addGame(gameName).id() : games.getFirst().id;
+            String regionName = optionalText(input.region());
+            if (regionName != null) {
+                var regions = db.createQuery("from Region r where r.game.id = :game and r.nameKey = :key", Region.class)
+                        .setParameter("game", gameId).setParameter("key", nameKey(regionName)).getResultList();
+                regionId = regions.isEmpty() ? addRegion(gameId, regionName).id() : regions.getFirst().id;
+            }
+        }
+        var p = input.planning();
+        UUID id = UUID.randomUUID();
+        save(id, new Input(gameId, regionId, input.title(), input.author(), input.body(), Quest.WritingState.DRAFT,
+                new QuestPlanning.Patch(p.code(), p.chapter(), p.prerequisites(), p.optional(), p.rewards(), p.background())));
+        saveFlow(id, flow);
+        db.flush();
+        db.refresh(db.find(Quest.class, id));
+        return quest(id);
+    }
+
     FlowDocument flow(UUID id) {
         requireQuest(db.find(Quest.class, id));
         QuestFlow flow = db.find(QuestFlow.class, id);

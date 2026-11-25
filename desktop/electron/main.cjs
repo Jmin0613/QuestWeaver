@@ -5,10 +5,12 @@ const { startBackend } = require('./backend.cjs');
 const { createAiSettings } = require('./aiSettings.cjs');
 const { savePng } = require('./pngExport.cjs');
 const { installKoreanMenu } = require('./menu.cjs');
+const { createQuestFiles } = require('./questFiles.cjs');
 
 let window;
 let backend;
 let aiSettings;
+let questFiles;
 let stopping = false;
 let readyToQuit = false;
 let closeGuard = false;
@@ -98,6 +100,16 @@ if (!app.requestSingleInstanceLock()) {
     return savePng(window, title, bytes);
   });
 
+  for (const [channel, action] of [['quest:export', 'export'], ['quest:choose-file', 'choose'], ['quest:import-file', 'confirm']]) {
+    ipcMain.handle(channel, (event, value) => {
+      if (!isAppFrame(event) || !questFiles || stopping) return { status: 'error', message: '퀘스트 파일을 처리할 수 없습니다.' };
+      return action === 'confirm' ? questFiles.confirm(value) : questFiles[action](window, value);
+    });
+  }
+  ipcMain.on('quest:cancel-file', (event, ticket) => {
+    if (isAppFrame(event)) questFiles?.cancel(ticket);
+  });
+
   ipcMain.on('editor:close-guard', (event, guarded) => {
     if (isAppFrame(event)) closeGuard = guarded === true;
   });
@@ -165,6 +177,7 @@ if (!app.requestSingleInstanceLock()) {
           publishStatus();
         },
       });
+      questFiles = createQuestFiles({ dialog, downloads: () => app.getPath('downloads'), request: (...args) => backend.request(...args) });
     } catch (error) {
       console.error('[backend setup]', error);
       status = { state: 'failed', message: '백엔드 실행 환경 또는 데이터 폴더를 확인하세요.' };

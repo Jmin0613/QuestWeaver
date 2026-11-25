@@ -1,4 +1,5 @@
 import { AiSettingsProvider, useAiSettings } from './AiSettings';
+import { QuestFileExport, QuestFileImport } from './QuestFiles';
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QuestEditor } from './QuestEditor';
@@ -47,6 +48,7 @@ function QuestList({ filters, setFilters, games, connected, onOpen, onAdd }: {
     <section className="panel" aria-labelledby="list-title">
       <div className="section-heading">
         <h2 id="list-title">퀘스트 목록</h2>
+        <QuestFileImport disabled={!connected} onImported={(id) => { games.reload(); onOpen(id); }} />
         {(!empty || hasFilters) && <button className="primary" disabled={!connected} onClick={onAdd}>퀘스트 추가</button>}
       </div>
       <div className="filters">
@@ -169,6 +171,7 @@ function QuestView({ id, onBack, onEdit, onFlow, navigationGuard }: {
         <FlowPreview questId={id} gameName={info.gameName ?? '게임 미선택'} title={questTitle(info.title)}
           onEdit={() => onFlow(detail)} disabled={deleting} />
         <div className="actions">
+          <QuestFileExport id={id} disabled={deleting} />
           <button type="button" className="primary" disabled={deleting} onClick={() => onEdit(detail)}>수정</button>
           <button type="button" className="danger" disabled={deleting} onClick={() => void remove(questTitle(info.title))}>
             {deleting ? '삭제 중…' : '삭제'}

@@ -202,3 +202,9 @@ dd { margin: 4px 0 0; font-size: 0.92rem; overflow-wrap: anywhere; }
 .ai-store-option { display: flex; align-items: center; gap: 8px; }
 .ai-store-option input { width: auto; }
 .ai-settings-dialog code { overflow-wrap: anywhere; }
+.quest-file-action { min-width: 0; }
+.quest-file-action p { font-size: .85rem; }
+.quest-import-dialog { box-sizing: border-box; width: min(640px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; border: 1px solid #d6dce6; border-radius: 12px; padding: 24px; }
+.quest-import-dialog::backdrop { background: #14203980; }
+#list-title { margin-right: auto; }
+.section-heading:has(#list-title), .actions { flex-wrap: wrap; }
