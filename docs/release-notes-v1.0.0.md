@@ -19,7 +19,7 @@ QuestWeaver의 첫 정식 공개 버전인 Windows x64 로컬 퀘스트 기획 �
 
 | 항목 | 값 |
 | --- | --- |
-| 파일 | `QuestWeaver Setup 1.0.0.exe` |
+| GitHub 첨부 파일 | `QuestWeaver.Setup.1.0.0.exe` |
 | 로컬 위치 | `desktop/release/QuestWeaver Setup 1.0.0.exe` |
 | 크기 | 194,892,303 bytes (185.86 MiB) |
 | SHA-256 | `1D67D4E522C03583AD9FC432CDB8102FECE6294992F17B1839C33A628EDF843A` |
@@ -55,3 +55,5 @@ AI 생성 시 저장된 퀘스트 원문을 OpenAI로 전송하고 본인의 API
 Eclipse Temurin의 NOTICE 및 runtime/legal/ 아래 GPLv2·Classpath Exception·Assembly Exception·타사 고지를 보존합니다. [공식 배포](https://github.com/adoptium/temurin21-binaries/releases/tag/jdk-21.0.13.1%2B2), [해당 버전 OpenJDK 소스](https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13.1%2B2/OpenJDK21U-jdk-sources_21.0.13.1_2.tar.gz).
 
 설치 파일의 기존 SHA-256과 빌드 입력을 재확인했으며, v1.0.0 태그의 앱 소스를 대상으로 배포합니다. README 정리로 앱이나 설치 파일을 재빌드하지 않았습니다.
+
+GitHub는 업로드 파일명의 공백을 점으로 정리합니다. 로컬 설치 파일과 공개 첨부 파일의 내용·SHA-256은 같으며, SHA256SUMS.txt는 공개 첨부 파일명을 기준으로 합니다.

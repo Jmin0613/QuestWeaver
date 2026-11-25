@@ -45,7 +45,7 @@ JSON은 기존 퀘스트를 덮어쓰지 않고 새 임시저장 항목으로 �
 
 [QuestWeaver v1.0.0 다운로드](https://github.com/Jmin0613/QuestWeaver/releases/tag/v1.0.0)에서 Windows x64 설치 파일과 SHA-256 확인 파일을 받을 수 있습니다.
 
-1. `QuestWeaver Setup 1.0.0.exe`를 다운로드합니다.
+1. `QuestWeaver.Setup.1.0.0.exe`를 다운로드합니다.
 2. 설치 파일을 실행해 설치합니다.
 3. Windows 시작 메뉴에서 **QuestWeaver**를 검색해 실행합니다.
 

@@ -107,3 +107,5 @@ Get-FileHash 'desktop\release\QuestWeaver Setup 1.0.0.exe' -Algorithm SHA256
 - 기존 설치 파일 SHA-256과 크기는 변경되지 않았습니다. 59개 빌드 입력을 이전 manifest와 대조해 모두 일치함을 확인했습니다. 문서 변경만으로 앱·런타임·설치 파일을 재빌드하지 않았습니다. 커밋 후에도 해당 Git 소스와 입력 파일을 다시 비교합니다.
 - 공개 첨부는 설치 파일과 SHA256SUMS.txt 두 개만 사용합니다. 사용자 데이터·키·샘플·로그·캐시·빌드 입력 manifest는 첨부하지 않습니다.
 - 공개 주소: https://github.com/Jmin0613/QuestWeaver/releases/tag/v1.0.0
+
+- GitHub 첨부 설치 파일명은 업로드 시 공백이 점으로 정리된 `QuestWeaver.Setup.1.0.0.exe`입니다. 업로드 서버 digest가 기존 설치 파일 SHA-256과 일치합니다. SHA256SUMS.txt도 실제 다운로드 파일명에 맞췄습니다. 앱 소스 태그는 v1.0.0으로 유지하며 이 파일명 안내는 후속 문서 정리입니다.
